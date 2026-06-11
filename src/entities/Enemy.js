@@ -327,8 +327,46 @@ export class EnemyManager {
     this.controller.enableSnapToGround(0.4);
   }
 
+  /** True when an enemy capsule can stand at (x, z) without overlapping walls/props. */
+  isSpotFree(x, z) {
+    const shape = new RAPIER.Capsule(0.45, 0.3);
+    let blocked = false;
+    this.physics.world.intersectionsWithShape(
+      { x, y: 0.95, z },
+      { x: 0, y: 0, z: 0, w: 1 },
+      shape,
+      () => {
+        blocked = true;
+        return false; // stop iterating
+      }
+    );
+    return !blocked;
+  }
+
+  /** Spiral-search a free spot near the requested position so enemies never
+   *  spawn inside buildings, cars, trees or other colliders. */
+  findFreeSpot(pos) {
+    if (this.isSpotFree(pos.x, pos.z)) return pos;
+    for (let r = 2; r <= 14; r += 2) {
+      for (let k = 0; k < 10; k++) {
+        const a = (k / 10) * Math.PI * 2 + r * 0.7;
+        const x = pos.x + Math.cos(a) * r;
+        const z = pos.z + Math.sin(a) * r;
+        if (Math.abs(x) > 88 || Math.abs(z) > 88) continue;
+        if (this.isSpotFree(x, z)) {
+          pos.x = x;
+          pos.z = z;
+          return pos;
+        }
+      }
+    }
+    return pos;
+  }
+
   spawnAt(pos, type = 'shambler') {
-    this.enemies.push(new Enemy(this, pos, type));
+    const p = this.findFreeSpot(pos.clone());
+    p.y = 0;
+    this.enemies.push(new Enemy(this, p, type));
   }
 
   byCollider(handle) {
