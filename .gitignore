@@ -1,0 +1,16 @@
+# Secrets
+.env
+
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Test screenshots
+shots/
+
+# Logs / OS junk
+*.log
+Thumbs.db
+.DS_Store

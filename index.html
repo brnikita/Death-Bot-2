@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DEATH BOT 2 — К-250</title>
+</head>
+<body>
+  <canvas id="game"></canvas>
+
+  <div id="hud" class="hidden">
+    <div id="crosshair"><span></span><span></span><span></span><span></span></div>
+    <div id="hitmarker"></div>
+
+    <div id="status">
+      <div class="label">К-250 // БРОНЯ</div>
+      <div id="healthbar"><div id="healthfill"></div></div>
+      <div id="ammo"><span id="ammo-mag">30</span><span class="ammo-inf">/ ∞</span></div>
+    </div>
+
+    <div id="objective"></div>
+    <div id="wave-banner" class="hidden"></div>
+
+    <div id="bossbar" class="hidden">
+      <div class="label" id="bossname">ИНЖЕНЕР ХААС</div>
+      <div class="bar"><div id="bossfill"></div></div>
+    </div>
+  </div>
+
+  <div id="damage-overlay"></div>
+
+  <div id="screen">
+    <div class="panel">
+      <h1>DEATH BOT 2</h1>
+      <div class="divider"></div>
+      <p id="story">
+        Война в городе будущего окончена. Боевая машина <b>Р‑111</b> повержена —
+        её остановил <b>К‑250</b>, последний защитник города.<br /><br />
+        Но создатель Р‑111 не принял поражения. Эксперименты над собственным телом
+        превратили инженера в <b>рогатое чудовище</b> — полузомби, поднимающего мёртвых
+        солдат из руин. Он хочет уничтожить мир.<br /><br />
+        К‑250 снова в строю. Это последняя миссия.
+      </p>
+      <div class="divider"></div>
+      <p class="controls">
+        <b>WASD</b> — движение · <b>SHIFT</b> — бег · <b>ПРОБЕЛ</b> — прыжок<br />
+        <b>МЫШЬ</b> — камера · <b>ЛКМ</b> — огонь · <b>ПКМ</b> — прицел · <b>R</b> — перезарядка
+      </p>
+      <button id="play-btn" disabled>ЗАГРУЗКА…</button>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
