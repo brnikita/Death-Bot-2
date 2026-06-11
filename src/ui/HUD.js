@@ -41,7 +41,7 @@ export class HUD {
     this.mapBase = off;
   }
 
-  updateMinimap({ playerPos, viewYaw, enemies, boss, pickups, crates }) {
+  updateMinimap({ playerPos, viewYaw, enemies, boss, pickups, crates, objective }) {
     const ctx = this.mctx;
     const size = this.minimap.width;
     const c = size / 2;
@@ -78,6 +78,18 @@ export class HUD {
       ctx.beginPath();
       ctx.arc(c + boss.x * s, c + boss.z * s, pulse, 0, 7);
       ctx.fill();
+    }
+
+    // objective: pulsing gold diamond
+    if (objective) {
+      const k = 4 + Math.sin(performance.now() / 220) * 1.2;
+      ctx.save();
+      ctx.translate(c + objective.x * s, c + objective.z * s);
+      ctx.rotate(Math.PI / 4);
+      ctx.strokeStyle = '#ffce4a';
+      ctx.lineWidth = 1.6;
+      ctx.strokeRect(-k / 2, -k / 2, k, k);
+      ctx.restore();
     }
 
     // player: white view arrow

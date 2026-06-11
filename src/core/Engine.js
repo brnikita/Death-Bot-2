@@ -21,7 +21,7 @@ export class Engine {
       depth: false,
       preserveDrawingBuffer: preserve,
     });
-    this.renderer.setPixelRatio(lowfx ? 0.5 : Math.min(window.devicePixelRatio, 1.75));
+    this.renderer.setPixelRatio(lowfx ? 0.5 : Math.min(window.devicePixelRatio, 1.5));
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.18;
@@ -36,14 +36,21 @@ export class Engine {
     });
     this.composer.addPass(new RenderPass(this.scene, this.camera));
 
+    this.n8ao = null;
     if (!lowfx) {
-      const n8ao = new N8AOPostPass(this.scene, this.camera, window.innerWidth, window.innerHeight);
-      n8ao.configuration.aoRadius = 2.0;
-      n8ao.configuration.distanceFalloff = 4.0;
-      n8ao.configuration.intensity = 3.0;
-      n8ao.configuration.halfRes = true;
-      this.composer.addPass(n8ao);
+      this.n8ao = new N8AOPostPass(this.scene, this.camera, window.innerWidth, window.innerHeight);
+      this.n8ao.configuration.aoRadius = 2.0;
+      this.n8ao.configuration.distanceFalloff = 4.0;
+      this.n8ao.configuration.intensity = 3.0;
+      this.n8ao.configuration.halfRes = true;
+      this.composer.addPass(this.n8ao);
     }
+
+    // adaptive quality: drop a tier after sustained low FPS (never climbs back to avoid flicker)
+    this.qualityTier = 0; // 0 high, 1 medium, 2 low
+    this._fpsAcc = 0;
+    this._fpsN = 0;
+    this._lowT = 0;
 
     this.bloom = new BloomEffect({
       luminanceThreshold: 0.75,
@@ -71,6 +78,24 @@ export class Engine {
   }
 
   render(dt) {
+    if (dt > 0 && dt < 1) {
+      this._lowT = 1 / dt < 45 ? this._lowT + dt : 0;
+      if (this._lowT > 3 && this.qualityTier < 2) {
+        this.qualityTier++;
+        this._lowT = 0;
+        if (this.qualityTier === 1) {
+          this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.1));
+          this.resize();
+          console.info('[DB2] performance: switched to MEDIUM quality');
+        } else {
+          if (this.n8ao) this.n8ao.enabled = false;
+          this.renderer.setPixelRatio(1.0);
+          this.renderer.shadowMap.enabled = false;
+          this.resize();
+          console.info('[DB2] performance: switched to LOW quality');
+        }
+      }
+    }
     this.composer.render(dt);
   }
 }

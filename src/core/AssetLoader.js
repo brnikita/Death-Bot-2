@@ -6,6 +6,8 @@ const MODELS = {
   knight: 'assets/models/Knight.glb',
   minion: 'assets/models/Skeleton_Minion.glb',
   warrior: 'assets/models/Skeleton_Warrior.glb',
+  rogue: 'assets/models/Skeleton_Rogue.glb',
+  mage: 'assets/models/Skeleton_Mage.glb',
 };
 
 const TEXTURE_SETS = [

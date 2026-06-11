@@ -16,6 +16,15 @@ const SOUNDS = [
   'pickup',
   'music',
   'ambient',
+  'voice_ai_boot',
+  'voice_ai_wave',
+  'voice_ai_clear',
+  'voice_ai_lowhp',
+  'voice_ai_victory',
+  'voice_haas_intro',
+  'voice_haas_summon',
+  'voice_haas_enrage',
+  'voice_haas_death',
 ];
 
 export class AudioManager {
@@ -62,6 +71,18 @@ export class AudioManager {
     slot.a.setVolume(volume);
     slot.a.setPlaybackRate(rate + (Math.random() - 0.5) * 2 * jitter);
     slot.a.play();
+  }
+
+  /** Radio-style voice line: a new line interrupts the previous one. */
+  voice(name, volume = 0.95) {
+    const buf = this.buffers[name];
+    if (!buf) return;
+    if (this._voice && this._voice.isPlaying) this._voice.stop();
+    const a = new THREE.Audio(this.listener);
+    a.setBuffer(buf);
+    a.setVolume(volume);
+    a.play();
+    this._voice = a;
   }
 
   play2d(name, { volume = 1, rate = 1 } = {}) {

@@ -52,11 +52,12 @@ export class Atmosphere {
     this.sun.position.set(40, 26, -12);
     this.sun.castShadow = true;
     this.sun.shadow.mapSize.set(2048, 2048);
+    // the shadow frustum follows the player — smaller area, sharper shadows, cheaper
     const sc = this.sun.shadow.camera;
-    sc.left = -65;
-    sc.right = 65;
-    sc.top = 65;
-    sc.bottom = -65;
+    sc.left = -48;
+    sc.right = 48;
+    sc.top = 48;
+    sc.bottom = -48;
     sc.near = 1;
     sc.far = 160;
     this.sun.shadow.bias = -0.0006;
@@ -143,15 +144,21 @@ export class Atmosphere {
     this.dayF = dayF;
     this.nightF = nightF;
 
-    // sun position on its arc (moon at night: opposite, dim, blue)
+    // sun position on its arc (moon at night: opposite, dim, blue), anchored to the player
     const az = this.dayTime * Math.PI * 2 + Math.PI / 2;
     const el = Math.max(elev, 0.06);
     const r = 70;
+    const ax = playerPos ? playerPos.x : 0;
+    const az2 = playerPos ? playerPos.z : 0;
+    this.sun.target.position.set(ax, 0, az2);
     if (elev > -0.08) {
-      this.sun.position.set(Math.cos(az) * r * Math.cos(el), Math.sin(el) * r, Math.sin(az) * r * Math.cos(el));
+      this.sun.position.set(
+        ax + Math.cos(az) * r * Math.cos(el),
+        Math.sin(el) * r,
+        az2 + Math.sin(az) * r * Math.cos(el)
+      );
     } else {
-      // moon: mirrored azimuth, fixed gentle height
-      this.sun.position.set(-Math.cos(az) * r * 0.8, 30, -Math.sin(az) * r * 0.8);
+      this.sun.position.set(ax - Math.cos(az) * r * 0.8, 30, az2 - Math.sin(az) * r * 0.8);
     }
 
     const rainDim = 1 - this.rainLevel * 0.55;
@@ -208,7 +215,8 @@ export class Atmosphere {
       this.flash.intensity = 0;
     }
 
-    // ---------- dust drift ----------
+    // ---------- dust drift (the cloud follows the player) ----------
+    if (playerPos) this.dust.position.set(playerPos.x, 0, playerPos.z);
     const pos = this.dust.geometry.attributes.position.array;
     for (let i = 0; i < pos.length; i += 3) {
       pos[i] += this.vel[i] * dt;

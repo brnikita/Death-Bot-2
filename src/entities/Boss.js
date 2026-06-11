@@ -136,6 +136,7 @@ export class Boss {
     this.hud.showBoss('ИНЖЕНЕР ХААС — СОЗДАТЕЛЬ Р-111');
     this.hud.setBossHealth(1);
     this.audio.play3d('boss_roar', pos, { volume: 1 });
+    this.audio.voice('voice_haas_intro');
   }
 
   takeDamage(dmg, point) {
@@ -159,6 +160,7 @@ export class Boss {
       this.staggered25 = true;
       this.stagger();
       this.audio.play3d('boss_roar', this.pos, { volume: 1, rate: 0.85 });
+      this.audio.voice('voice_haas_enrage');
     }
   }
 
@@ -179,6 +181,7 @@ export class Boss {
     this.hud.setBossHealth(0);
     this.play('Death_B', 0.2, true, 0.65);
     this.audio.play3d('boss_roar', this.pos, { volume: 1, rate: 0.6 });
+    this.audio.voice('voice_haas_death');
     if (this.collider) {
       this.physics.world.removeCollider(this.collider, false);
       this.physics.world.removeRigidBody(this.body);
@@ -371,6 +374,7 @@ export class Boss {
           this.summonCD = 13;
           this.state = 'walk';
           this.play('Walking_B', 0.2);
+          this.audio.voice('voice_haas_summon');
           for (let i = 0; i < 3; i++) {
             const ang = Math.random() * Math.PI * 2;
             const p = this.pos.clone().add(new THREE.Vector3(Math.cos(ang) * 4, 0, Math.sin(ang) * 4));

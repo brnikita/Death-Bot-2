@@ -46,6 +46,22 @@ export class Wildlife {
       }
     }
 
+    // tumbleweeds rolling with the wind
+    this.weeds = [];
+    const weedMat = new THREE.MeshStandardMaterial({ color: 0x9a8a58, roughness: 1, wireframe: true });
+    for (let i = 0; i < 4; i++) {
+      const r = 0.4 + Math.random() * 0.35;
+      const weed = new THREE.Mesh(new THREE.IcosahedronGeometry(r, 1), weedMat);
+      weed.position.set((Math.random() - 0.5) * 160, r, (Math.random() - 0.5) * 160);
+      scene.add(weed);
+      this.weeds.push({
+        weed,
+        r,
+        vel: new THREE.Vector3(1.6 + Math.random() * 1.6, 0, 0.5 + Math.random() * 0.8),
+        spin: Math.random() * 2,
+      });
+    }
+
     // rats
     const fur = new THREE.MeshStandardMaterial({ color: 0x2a2622, roughness: 1 });
     for (let i = 0; i < 5; i++) {
@@ -80,6 +96,16 @@ export class Wildlife {
       c.bird.rotation.y = -c.phase - (dir > 0 ? 0 : Math.PI);
       const flap = Math.sin(c.flap) * 0.7;
       for (const { wing, side } of c.wings) wing.rotation.z = side * flap;
+    }
+
+    for (const w of this.weeds) {
+      w.weed.position.addScaledVector(w.vel, dt);
+      w.weed.position.y = w.r + Math.abs(Math.sin(this.time * 3 + w.spin)) * 0.25;
+      w.weed.rotation.z -= dt * (w.vel.x / w.r);
+      w.weed.rotation.x += dt * (w.vel.z / w.r);
+      if (w.weed.position.x > 95) w.weed.position.x = -95;
+      if (w.weed.position.z > 95) w.weed.position.z = -95;
+      if (w.weed.position.z < -95) w.weed.position.z = 95;
     }
 
     for (const r of this.rats) {

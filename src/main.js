@@ -16,7 +16,13 @@ import { EnemyManager } from './entities/Enemy.js';
 import { Boss } from './entities/Boss.js';
 
 const FIXED_DT = 1 / 60;
-const WAVES = [4, 6, 9];
+// миссии по районам: состав волн — { тип: количество }
+const STAGES = [
+  { district: 'plaza', waves: [{ shambler: 4 }, { shambler: 4, runner: 2 }] },
+  { district: 'industrial', waves: [{ shambler: 3, runner: 3 }, { shambler: 4, spitter: 2 }] },
+  { district: 'residential', waves: [{ runner: 4, spitter: 2 }, { shambler: 5, runner: 3, spitter: 2 }] },
+  { district: 'hive', boss: true },
+];
 const PARAMS = new URLSearchParams(location.search);
 const DEBUG = PARAMS.has('debug');
 const LOWFX = PARAMS.has('lowfx');
@@ -40,7 +46,7 @@ async function boot() {
   const level = new Level(engine.scene, physics, assets);
   const wildlife = new Wildlife(engine.scene);
   const vfx = new VFX(engine.scene);
-  hud.initMinimap(level.mapStatics, 60);
+  hud.initMinimap(level.mapStatics, 95);
   const audio = new AudioManager(engine.camera, engine.scene);
   await audio.loadAll();
 
@@ -49,13 +55,21 @@ async function boot() {
   player.setSpawn(level.playerSpawn);
   cameraRig.playerModel = player.root;
 
-  const enemies = new EnemyManager(assets.models.minion, engine.scene, physics, vfx, audio);
+  const enemies = new EnemyManager(
+    { minion: assets.models.minion, rogue: assets.models.rogue, mage: assets.models.mage },
+    engine.scene,
+    physics,
+    vfx,
+    audio
+  );
   const boss = new Boss(assets.models.warrior, engine.scene, physics, vfx, audio, hud, enemies);
 
   // game director state
   let state = 'menu'; // menu | play | pause | over
-  let wave = 0;
-  let waveT = 2.5;
+  let stageIdx = 0;
+  let stageWave = 0;
+  let stagePhase = 'travel'; // travel | combat | done
+  let waveT = 2;
   let bossStarted = false;
   let trickleT = 18;
 
@@ -88,20 +102,28 @@ async function boot() {
 
   boss.onDeath = () => {
     state = 'over';
+    audio.voice('voice_ai_victory');
     document.exitPointerLock();
     hud.hideBoss();
     hud.showEnd(true);
   };
 
-  function spawnWave(n) {
-    const pts = [...level.spawnPoints].sort(() => Math.random() - 0.5);
-    for (let i = 0; i < n; i++) {
-      const base = pts[i % pts.length];
-      const p = base.clone();
-      p.x += (Math.random() - 0.5) * 3;
-      p.z += (Math.random() - 0.5) * 3;
-      p.y = 0;
-      enemies.spawnAt(p);
+  /** Spawn a wave composition around a district center. */
+  function spawnWave(composition, center) {
+    let i = 0;
+    for (const [type, n] of Object.entries(composition)) {
+      for (let k = 0; k < n; k++) {
+        const a = (i / 8) * Math.PI * 2 + Math.random();
+        const r = 14 + Math.random() * 8;
+        const p = center.clone();
+        p.x += Math.cos(a) * r;
+        p.z += Math.sin(a) * r;
+        p.y = 0;
+        p.x = THREE.MathUtils.clamp(p.x, -88, 88);
+        p.z = THREE.MathUtils.clamp(p.z, -88, 88);
+        enemies.spawnAt(p, type);
+        i++;
+      }
     }
   }
 
@@ -110,28 +132,65 @@ async function boot() {
       trickleT -= dt;
       if (trickleT <= 0 && enemies.aliveCount() < 3 && !boss.dead) {
         trickleT = 20;
-        spawnWave(2);
+        spawnWave({ shambler: 1, runner: 1 }, level.districts.hive.center);
       }
       return;
     }
-    if (wave < WAVES.length) {
+
+    const stage = STAGES[stageIdx];
+    const district = level.districts[stage.district];
+
+    if (stage.boss) {
+      // финальный этап: дойти до комплекса HIVE
+      if (stagePhase === 'travel') {
+        hud.objective(`ИДИТЕ К ЦЕЛИ: ${district.name}`);
+        if (player.pos.distanceTo(district.center) < district.radius) {
+          bossStarted = true;
+          hud.banner('ИНЖЕНЕР ХААС');
+          hud.objective('УНИЧТОЖЬТЕ ИНЖЕНЕРА — СПАСИТЕ ГОРОД');
+          boss.spawn(level.bossSpawn);
+          cameraRig.addTrauma(0.55);
+        }
+      }
+      return;
+    }
+
+    if (stagePhase === 'travel') {
+      hud.objective(`ИДИТЕ К ЦЕЛИ: ${district.name}`);
+      if (player.pos.distanceTo(district.center) < district.radius) {
+        stagePhase = 'combat';
+        stageWave = 0;
+        waveT = 1.2;
+      }
+    } else if (stagePhase === 'combat') {
       if (enemies.aliveCount() === 0) {
         waveT -= dt;
         if (waveT <= 0) {
-          wave++;
-          hud.banner(`ВОЛНА ${wave}`);
-          hud.objective(`ВОЛНА ${wave} / ${WAVES.length} — УНИЧТОЖЬТЕ НЕЖИТЬ`);
-          spawnWave(WAVES[wave - 1]);
-          waveT = 3.5;
+          if (stageWave < stage.waves.length) {
+            stageWave++;
+            hud.banner(`${district.name} — ВОЛНА ${stageWave}`);
+            hud.objective(`${district.name}: ВОЛНА ${stageWave} / ${stage.waves.length}`);
+            audio.voice('voice_ai_wave');
+            spawnWave(stage.waves[stageWave - 1], district.center);
+            waveT = 3.5;
+          } else {
+            // район зачищен
+            audio.voice('voice_ai_clear');
+            stageIdx++;
+            stagePhase = 'travel';
+            const next = level.districts[STAGES[stageIdx].district];
+            hud.banner(`СЕКТОР ЗАЧИЩЕН`);
+            hud.objective(`ИДИТЕ К ЦЕЛИ: ${next.name}`);
+          }
         }
       }
-    } else if (enemies.aliveCount() === 0) {
-      bossStarted = true;
-      hud.banner('ИНЖЕНЕР ХААС');
-      hud.objective('УНИЧТОЖЬТЕ ИНЖЕНЕРА — СПАСИТЕ ГОРОД');
-      boss.spawn(level.bossSpawn);
-      cameraRig.addTrauma(0.55);
     }
+  }
+
+  function currentObjectivePos() {
+    if (bossStarted) return boss.dead ? null : boss.pos;
+    const stage = STAGES[stageIdx];
+    return level.districts[stage.district].center;
   }
 
   // ---------- start / pause ----------
@@ -140,11 +199,12 @@ async function boot() {
   playBtn.addEventListener('click', () => {
     audio.resume();
     audio.startLoops();
+    audio.voice('voice_ai_boot');
     hud.hideScreen();
     hud.show();
     hud.setHealth(1);
     hud.setAmmo(30, false);
-    hud.objective('ЗАЧИСТИТЕ ПЛОЩАДЬ');
+    hud.objective('ИДИТЕ К ЦЕЛИ: ПЛОЩАДЬ');
     state = 'play';
     input.lock();
   });
@@ -175,8 +235,11 @@ async function boot() {
       getState: () => state,
       setState: (s) => (state = s),
       startBoss: () => {
-        wave = WAVES.length;
+        stageIdx = STAGES.length - 1;
+        stagePhase = 'travel';
         enemies.enemies.forEach((e) => !e.dead && e.die());
+        bossStarted = true;
+        boss.spawn(level.bossSpawn);
       },
       ready: true,
     };
@@ -208,6 +271,7 @@ async function boot() {
       cameraRig.update(dt, player.pos, player.collider);
       atmosphere.update(dt, player.pos);
       level.update(dt, atmosphere.nightF);
+      level.updateZones(player.pos);
       wildlife.update(dt);
       vfx.update(dt);
       hud.updateMinimap({
@@ -217,6 +281,7 @@ async function boot() {
         boss: boss.active && !boss.dead ? boss.pos : null,
         pickups: enemies.pickups.map((p) => p.m.position),
         crates: level.crates.map((cr) => cr.pos),
+        objective: currentObjectivePos(),
       });
       input.endFrame();
     } else if (state === 'menu' || state === 'pause' || state === 'over') {

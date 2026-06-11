@@ -251,6 +251,10 @@ export class Player {
     this.hud.setHealth(this.hp / this.maxHp);
     this.cameraRig.addTrauma(0.35);
     this.audio.play2d('player_hurt', { volume: 0.7 });
+    if (this.hp > 0 && this.hp < 32 && (this.lowHpVoiceT === undefined || this.lowHpVoiceT < performance.now() - 18000)) {
+      this.lowHpVoiceT = performance.now();
+      this.audio.voice('voice_ai_lowhp');
+    }
     if (this.hp <= 0) {
       this.dead = true;
       this.setUpperActive(false);
