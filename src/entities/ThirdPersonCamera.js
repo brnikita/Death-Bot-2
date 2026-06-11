@@ -43,13 +43,14 @@ export class ThirdPersonCamera {
     this.trauma = Math.max(0, this.trauma - dt * 1.6);
     this._noiseT += dt * 30;
 
-    const targetDist = this.aiming ? 2.6 : 4.7;
+    const targetDist = this.aiming ? 2.8 : 4.7;
     this.dist = THREE.MathUtils.damp(this.dist, targetDist, 10, dt);
 
     // pivot: above the shoulders, offset to the right of view
     const fwd = new THREE.Vector3(-Math.sin(this.yaw), 0, -Math.cos(this.yaw));
     const right = new THREE.Vector3(-fwd.z, 0, fwd.x);
-    this._pivot.copy(playerPos).add(new THREE.Vector3(0, 1.3, 0)).addScaledVector(right, this.aiming ? 0.55 : 0.45);
+    // strong shoulder offset keeps the hero's body clear of the crosshair line
+    this._pivot.copy(playerPos).add(new THREE.Vector3(0, 1.35, 0)).addScaledVector(right, this.aiming ? 1.0 : 0.7);
 
     // desired camera offset (spherical around pivot)
     const cp = Math.cos(this.pitch);

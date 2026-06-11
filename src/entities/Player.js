@@ -494,8 +494,10 @@ export class Player {
       if (enemy) {
         enemy.takeDamage(DAMAGE, end, dir);
         this.hud.hitmarker();
-        this.vfx.burst(end, normal, 0x88ff66, 10, 3.5);
-        this.audio.play3d('impact_zombie', end, { volume: 0.55 });
+        if (!enemy.isCrate) {
+          this.vfx.burst(end, normal, 0x88ff66, 10, 3.5);
+          this.audio.play3d('impact_zombie', end, { volume: 0.55 });
+        }
       } else {
         this.vfx.burst(end, normal, 0xffaa44, 12, 4);
         this.audio.play3d('impact_metal', end, { volume: 0.4 });

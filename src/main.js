@@ -6,6 +6,7 @@ import { Input } from './core/Input.js';
 import { Assets } from './core/AssetLoader.js';
 import { Atmosphere } from './world/Atmosphere.js';
 import { Level } from './world/Level.js';
+import { Wildlife } from './world/Wildlife.js';
 import { VFX } from './fx/VFX.js';
 import { AudioManager } from './audio/AudioManager.js';
 import { HUD } from './ui/HUD.js';
@@ -37,7 +38,9 @@ async function boot() {
   const input = new Input(canvas, DEBUG);
   const atmosphere = new Atmosphere(engine.scene, assets.hdri);
   const level = new Level(engine.scene, physics, assets);
+  const wildlife = new Wildlife(engine.scene);
   const vfx = new VFX(engine.scene);
+  hud.initMinimap(level.mapStatics, 60);
   const audio = new AudioManager(engine.camera, engine.scene);
   await audio.loadAll();
 
@@ -60,6 +63,18 @@ async function boot() {
     const e = enemies.byCollider(handle);
     if (e) return e;
     if (boss.collider && boss.collider.handle === handle) return boss;
+    const crate = level.crateByCollider(handle);
+    if (crate) {
+      return {
+        isCrate: true,
+        takeDamage: (dmg, point) => {
+          level.breakCrate(crate);
+          vfx.burst(point, new THREE.Vector3(0, 1, 0), 0x7fe8ff, 18, 5);
+          audio.play3d('impact_metal', crate.pos, { volume: 0.7 });
+          enemies.spawnPickup(crate.pos.clone());
+        },
+      };
+    }
     return null;
   };
 
@@ -156,6 +171,7 @@ async function boot() {
       level,
       input,
       audio,
+      atmosphere,
       getState: () => state,
       setState: (s) => (state = s),
       startBoss: () => {
@@ -190,19 +206,29 @@ async function boot() {
       }
 
       cameraRig.update(dt, player.pos, player.collider);
-      level.update(dt);
-      atmosphere.update(dt);
+      atmosphere.update(dt, player.pos);
+      level.update(dt, atmosphere.nightF);
+      wildlife.update(dt);
       vfx.update(dt);
+      hud.updateMinimap({
+        playerPos: player.pos,
+        viewYaw: -cameraRig.yaw,
+        enemies: enemies.enemies.filter((e) => !e.dead).map((e) => e.pos),
+        boss: boss.active && !boss.dead ? boss.pos : null,
+        pickups: enemies.pickups.map((p) => p.m.position),
+        crates: level.crates.map((cr) => cr.pos),
+      });
       input.endFrame();
     } else if (state === 'menu' || state === 'pause' || state === 'over') {
       // slow idle orbit on menu
       if (state === 'menu') {
         const t = now * 0.00012;
-        engine.camera.position.set(Math.sin(t) * 26, 9, Math.cos(t) * 26);
+        engine.camera.position.set(Math.sin(t) * 34, 12, Math.cos(t) * 34);
         engine.camera.lookAt(0, 2, -8);
       }
-      level.update(dt);
-      atmosphere.update(dt);
+      atmosphere.update(dt, player.pos);
+      level.update(dt, atmosphere.nightF);
+      wildlife.update(dt);
       vfx.update(dt);
     }
 
