@@ -579,19 +579,25 @@ export class Level {
   }
 
   addTent(x, z, rot, zoneGroup) {
-    const mat = new THREE.MeshStandardMaterial({ color: 0x55604a, roughness: 1, side: THREE.DoubleSide });
+    // ridge tent: two slabs leaning into each other (same pattern as the house roofs)
+    const mat = new THREE.MeshStandardMaterial({ color: 0x55604a, roughness: 1 });
     const g = new THREE.Group();
     for (const side of [-1, 1]) {
-      const sheet = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 3.4), mat);
-      sheet.position.set(side * 0.9, 0.95, 0);
-      sheet.rotation.set(Math.PI / 2, side * 0.82, 0);
-      sheet.castShadow = true;
-      g.add(sheet);
+      const slab = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.07, 3.0), mat);
+      slab.position.set(side * 0.58, 0.72, 0);
+      slab.rotation.z = -side * 1.02;
+      slab.castShadow = slab.receiveShadow = true;
+      g.add(slab);
     }
+    // back wall (triangle approximated by a thin box rotated 45°)
+    const back = new THREE.Mesh(new THREE.BoxGeometry(1.05, 1.05, 0.06), mat);
+    back.position.set(0, 0.62, -1.45);
+    back.rotation.z = Math.PI / 4;
+    g.add(back);
     g.position.set(x, 0, z);
     g.rotation.y = rot;
     this.parentOf(zoneGroup).add(g);
-    this.physics.addBox(x, 0.9, z, 2.4, 1.8, 3.2, rot);
+    this.physics.addBox(x, 0.7, z, 2.2, 1.4, 3.0, rot);
   }
 
   addPlayground(x, z, zoneGroup) {
@@ -796,27 +802,45 @@ export class Level {
   addDrone(x, z, zoneGroup = null) {
     const g = new THREE.Group();
     const dark = new THREE.MeshStandardMaterial({ color: 0x23282e, metalness: 0.7, roughness: 0.5 });
-    const core = new THREE.Mesh(new THREE.SphereGeometry(0.3, 10, 8), dark);
-    core.position.y = 0.22;
-    core.scale.y = 0.6;
+    // scorch mark under the crash site
+    const scorch = new THREE.Mesh(
+      new THREE.CircleGeometry(1.1, 14),
+      new THREE.MeshStandardMaterial({ color: 0x14100c, roughness: 1, transparent: true, opacity: 0.75 })
+    );
+    scorch.rotation.x = -Math.PI / 2;
+    scorch.position.y = 0.012;
+    g.add(scorch);
+
+    const core = new THREE.Mesh(new THREE.SphereGeometry(0.34, 12, 10), dark);
+    core.position.y = 0.24;
+    core.scale.y = 0.55;
     g.add(core);
+    // four arms with rotor rings — reads as a crashed quadcopter
+    const rotorMat = new THREE.MeshStandardMaterial({ color: 0x3a4248, metalness: 0.6, roughness: 0.6 });
     for (const a of [0.785, 2.36]) {
       const arm = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.07, 0.12), dark);
-      arm.position.y = 0.25;
+      arm.position.y = 0.24;
       arm.rotation.y = a;
       g.add(arm);
+      for (const end of [-1, 1]) {
+        const ring = new THREE.Mesh(new THREE.TorusGeometry(0.21, 0.035, 6, 14), rotorMat);
+        ring.position.set(Math.cos(a) * 0.75 * end, 0.24, -Math.sin(a) * 0.75 * end);
+        ring.rotation.x = Math.PI / 2;
+        g.add(ring);
+      }
     }
     const eye = new THREE.Mesh(
-      new THREE.CircleGeometry(0.06, 8),
+      new THREE.CircleGeometry(0.07, 8),
       new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0xff3300, emissiveIntensity: 0.5 })
     );
-    eye.position.set(0, 0.28, 0.29);
+    eye.position.set(0, 0.3, 0.33);
     g.add(eye);
     g.traverse((o) => {
       if (o.isMesh) o.castShadow = true;
     });
     g.position.set(x, 0, z);
-    g.rotation.set(0.12, Math.random() * 3, -0.08);
+    g.rotation.y = Math.random() * 3;
+    g.rotation.z = -0.07;
     this.parentOf(zoneGroup).add(g);
   }
 
@@ -871,12 +895,43 @@ export class Level {
     physics.addBox(x, h / 2, z, 0.4, h, 0.4);
   }
 
+  /** Transparent texture with a few tapering grass blades — without it the crossed
+   *  quads render as solid X shapes lying on the ground. */
+  static grassTexture() {
+    const c = document.createElement('canvas');
+    c.width = 64;
+    c.height = 64;
+    const ctx = c.getContext('2d');
+    ctx.clearRect(0, 0, 64, 64);
+    for (let i = 0; i < 9; i++) {
+      const bx = 6 + i * 6 + (Math.random() - 0.5) * 3;
+      const lean = (Math.random() - 0.5) * 10;
+      const h = 28 + Math.random() * 30;
+      const hue = 45 + Math.random() * 18;
+      ctx.strokeStyle = `hsl(${hue}, ${30 + Math.random() * 20}%, ${30 + Math.random() * 14}%)`;
+      ctx.lineWidth = 1.6 + Math.random();
+      ctx.beginPath();
+      ctx.moveTo(bx, 64);
+      ctx.quadraticCurveTo(bx + lean * 0.4, 64 - h * 0.6, bx + lean, 64 - h);
+      ctx.stroke();
+    }
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    return t;
+  }
+
   addGrass(count, maxR) {
-    const geo = new THREE.PlaneGeometry(0.5, 0.45);
-    geo.translate(0, 0.22, 0);
-    const mat = new THREE.MeshStandardMaterial({ color: 0x8a7a4a, roughness: 1, side: THREE.DoubleSide });
+    const geo = new THREE.PlaneGeometry(0.55, 0.5);
+    geo.translate(0, 0.25, 0);
+    const mat = new THREE.MeshStandardMaterial({
+      map: Level.grassTexture(),
+      alphaTest: 0.4,
+      roughness: 1,
+      side: THREE.DoubleSide,
+    });
     const inst = new THREE.InstancedMesh(geo, mat, count * 2);
     const dummy = new THREE.Object3D();
+    const color = new THREE.Color();
     let idx = 0;
     for (let i = 0; i < count; i++) {
       const a = Math.random() * Math.PI * 2;
@@ -885,15 +940,19 @@ export class Level {
       const z = Math.sin(a) * r;
       const ry = Math.random() * Math.PI;
       const s = 0.7 + Math.random() * 0.9;
+      const shade = 0.75 + Math.random() * 0.45;
       for (const extra of [0, Math.PI / 2]) {
         dummy.position.set(x, 0, z);
         dummy.rotation.set(0, ry + extra, 0);
         dummy.scale.setScalar(s);
         dummy.updateMatrix();
-        inst.setMatrixAt(idx++, dummy.matrix);
+        inst.setMatrixAt(idx, dummy.matrix);
+        inst.setColorAt(idx, color.setScalar(shade));
+        idx++;
       }
     }
     inst.instanceMatrix.needsUpdate = true;
+    if (inst.instanceColor) inst.instanceColor.needsUpdate = true;
     inst.receiveShadow = true;
     this.scene.add(inst);
   }
