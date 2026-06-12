@@ -37,46 +37,55 @@ export class Boss {
         o.castShadow = true;
         o.frustumCulled = false;
         o.material = o.material.clone();
-        o.material.color.multiply(new THREE.Color(0.55, 0.42, 0.4));
-        o.material.emissive = new THREE.Color(0x330505);
-        o.material.emissiveIntensity = 0.5;
+        o.material.color.multiply(new THREE.Color(0.4, 0.72, 1.0)); // голубая кожа тролля
+        o.material.emissive = new THREE.Color(0x06182e);
+        o.material.emissiveIntensity = 0.55;
         this.mats.push(o.material);
       }
       if (/shield|crossbow|quiver|staff|arrow|blade/i.test(o.name)) o.visible = false;
       if (/axe/i.test(o.name)) o.visible = true;
     });
 
-    // ---- horns (the engineer's mutation) ----
+    // ---- тролль: большие уши, нос картошкой, клыки, жёлтые глаза ----
     const head = this.model.getObjectByName('head');
     if (head) {
-      const hornMat = new THREE.MeshStandardMaterial({ color: 0x1c0f0a, roughness: 0.55, metalness: 0.1 });
-      for (const side of [-1, 1]) {
-        const horn = new THREE.Group();
-        const seg1 = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.3, 8), hornMat);
-        seg1.position.y = 0.15;
-        horn.add(seg1);
-        const seg2 = new THREE.Mesh(new THREE.ConeGeometry(0.045, 0.22, 8), hornMat);
-        seg2.position.set(0, 0.3, 0.04);
-        seg2.rotation.x = 0.5;
-        horn.add(seg2);
-        horn.position.set(side * 0.16, 0.3, 0);
-        horn.rotation.z = -side * 0.55;
-        horn.rotation.x = -0.15;
-        head.add(horn);
+      const skinMat = new THREE.MeshStandardMaterial({ color: 0x3d7fc4, roughness: 0.75, metalness: 0.05 });
+      const tuskMat = new THREE.MeshStandardMaterial({ color: 0xf2ecd8, roughness: 0.4, metalness: 0.05 });
 
-        // glowing red eye
+      // уши — широкие, торчат в стороны
+      for (const side of [-1, 1]) {
+        const ear = new THREE.Mesh(new THREE.ConeGeometry(0.085, 0.3, 8), skinMat);
+        ear.position.set(side * 0.24, 0.16, -0.02);
+        ear.rotation.z = -side * (Math.PI / 2 - 0.35);
+        ear.scale.z = 0.45;
+        head.add(ear);
+
+        // жёлтые глаза тролля
         const eye = new THREE.Mesh(
-          new THREE.SphereGeometry(0.035, 8, 8),
-          new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0xff1a00, emissiveIntensity: 6 })
+          new THREE.SphereGeometry(0.038, 8, 8),
+          new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0xffb31a, emissiveIntensity: 5 })
         );
         eye.position.set(side * 0.09, 0.1, 0.22);
         head.add(eye);
+
+        // клыки снизу вверх, как у тролля
+        const tusk = new THREE.Mesh(new THREE.ConeGeometry(0.028, 0.13, 6), tuskMat);
+        tusk.position.set(side * 0.07, -0.02, 0.24);
+        tusk.rotation.x = 0.25;
+        tusk.rotation.z = -side * 0.18;
+        head.add(tusk);
       }
+
+      // нос картошкой
+      const nose = new THREE.Mesh(new THREE.SphereGeometry(0.055, 10, 8), skinMat);
+      nose.position.set(0, 0.045, 0.27);
+      nose.scale.set(1, 0.85, 0.9);
+      head.add(nose);
     }
 
     // свет всегда в сцене с intensity 0: смена числа видимых источников
     // заставляет three.js перекомпилировать шейдеры всей сцены (фриз)
-    this.glow = new THREE.PointLight(0xff2210, 0, 12, 2);
+    this.glow = new THREE.PointLight(0x3a9bff, 0, 12, 2);
     this.glow.position.y = -100;
     scene.add(this.glow);
 
