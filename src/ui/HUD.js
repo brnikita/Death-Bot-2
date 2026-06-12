@@ -124,7 +124,7 @@ export class HUD {
   }
 
   setKits(n, max) {
-    this.kitsEl.textContent = `РЕМОНТ [Q] ${'◆'.repeat(n)}${'◇'.repeat(Math.max(0, max - n))}`;
+    this.kitsEl.textContent = `РЕМОНТ [+] ${'◆'.repeat(n)}${'◇'.repeat(Math.max(0, max - n))}`;
     this.kitsEl.classList.toggle('empty', n === 0);
   }
 

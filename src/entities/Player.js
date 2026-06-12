@@ -469,8 +469,10 @@ export class Player {
       this.shoot(input, enemyLookup);
     }
 
-    // ---- саморемонт (Q): тратит ремкомплект, +45 брони за 1.8с ----
-    if (input.wasPressed('KeyQ') && this.kits > 0 && this.repairT <= 0 && this.hp < this.maxHp - 1) {
+    // ---- саморемонт (+): тратит ремкомплект, +45 брони за 1.8с ----
+    const repairPressed =
+      input.wasPressed('NumpadAdd') || input.wasPressed('Equal') || input.wasPressed('KeyQ');
+    if (repairPressed && this.kits > 0 && this.repairT <= 0 && this.hp < this.maxHp - 1) {
       this.kits--;
       this.repairT = 1.8;
       this.hud.setKits(this.kits, this.maxKits);

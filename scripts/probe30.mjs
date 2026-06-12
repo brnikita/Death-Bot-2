@@ -16,7 +16,7 @@ const start = await page.evaluate(() => {
   p.hp = 30;
   p.hud.setHealth(0.3);
   p.sinceDamage = 0; // чтобы пассивная регенерация не мешала замеру
-  window.DB2.input.pressed.add('KeyQ');
+  window.DB2.input.pressed.add('NumpadAdd');
   return { hp: p.hp, kits: p.kits, kitsHud: document.getElementById('kits').textContent };
 });
 console.log('before:', JSON.stringify(start));
@@ -43,7 +43,7 @@ console.log('pickup collected into reserve:', await page.evaluate(() => document
 const noWaste = await page.evaluate(() => {
   const p = window.DB2.player;
   p.hp = p.maxHp;
-  window.DB2.input.pressed.add('KeyQ');
+  window.DB2.input.pressed.add('NumpadAdd');
   return true;
 });
 await page.waitForTimeout(1200);
