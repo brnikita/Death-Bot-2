@@ -50,8 +50,9 @@ export class Player {
 
     // ---------- visual ----------
     this.model = gltf.scene;
-    this.model.scale.setScalar(1.15); // пропорции дроида собраны на этом масштабе
-    this.buildDroid();
+    this.model.scale.setScalar(1.15); // пропорции тел собраны на этом масштабе
+    this.buildBodies();
+    this.setHero('k250');
     this.model.scale.setScalar(1.15 * SIZE); // и затем увеличены целиком
     this.root = new THREE.Group();
     this.root.add(this.model);
@@ -120,36 +121,35 @@ export class Player {
     return false; // некуда — оставляем лежать
   }
 
-  /**
-   * К-250: высокий худой дроид охраны — матово-чёрный корпус, куполообразная
-   * голова с круглыми светящимися глазами, тонкие конечности с шарнирами.
-   * Меши рыцаря скрываются, детали дроида крепятся прямо к костям скелета,
-   * поэтому все анимации (бег, прыжок, стрельба) работают без изменений.
-   */
-  buildDroid() {
-    const M = (o) => new THREE.MeshStandardMaterial(o);
-    const body = M({ color: 0x121419, metalness: 0.6, roughness: 0.56 });
-    const dark = M({ color: 0x0a0c0f, metalness: 0.5, roughness: 0.66 });
-    const joint = M({ color: 0x555b62, metalness: 0.92, roughness: 0.3 });
-    const accent = M({ color: 0x4f4839, metalness: 0.35, roughness: 0.7 });
-    const eyeM = M({ color: 0x020308, emissive: 0x1a35d4, emissiveIntensity: 2.6 }); // тёмно-синее свечение
-    const coreM = M({ color: 0x000000, emissive: 0x33e8ff, emissiveIntensity: 3 });
-
+  /** Обе «шкуры» героя строятся на костях рыцаря — анимации общие. */
+  buildBodies() {
     // спрятать всё родное тело рыцаря — скелет продолжает анимироваться
     this.model.traverse((o) => {
       if (o.isMesh || o.isSkinnedMesh) o.visible = false;
     });
-    this.model.updateMatrixWorld(true);
+    this.droidParts = [];
+    this.trollParts = [];
+    this.buildDroid(this.droidParts);
+    this.buildTroll(this.trollParts);
+  }
 
+  /** Переключение героя: К-250 или голубой тролль. */
+  setHero(kind = 'k250') {
+    this.hero = kind;
+    for (const m of this.droidParts) m.visible = kind !== 'troll';
+    for (const m of this.trollParts) m.visible = kind === 'troll';
+  }
+
+  /** Общий набор хелперов: детали задаются в мировых координатах (поза покоя,
+   *  лицом к +Z) и конвертируются в локальное пространство кости. */
+  _bodyKit(parts) {
+    this.model.updateMatrixWorld(true);
     const bones = {};
     this.model.traverse((o) => {
       if (o.isBone) bones[o.name] = o;
     });
     const W = (b) => b.getWorldPosition(new THREE.Vector3());
     const UPV = new THREE.Vector3(0, 1, 0);
-
-    // детали задаются в мировых координатах (поза покоя, лицом к +Z),
-    // затем конвертируются в локальное пространство кости
     const attach = (b, mesh, wpos, wquat = null) => {
       b.add(mesh);
       mesh.position.copy(b.worldToLocal(wpos.clone()));
@@ -157,6 +157,7 @@ export class Player {
       mesh.quaternion.copy(wquat ? bq.multiply(wquat) : bq);
       mesh.scale.multiplyScalar(1 / b.getWorldScale(new THREE.Vector3()).x);
       mesh.castShadow = true;
+      parts.push(mesh);
       return mesh;
     };
     const box = (b, w, h, d, mat, wpos) =>
@@ -171,6 +172,22 @@ export class Player {
       const q = new THREE.Quaternion().setFromUnitVectors(UPV, dir.clone().normalize());
       return attach(bA, mesh, a.addScaledVector(dir, 0.5), q);
     };
+    return { bones, W, attach, box, ball, seg };
+  }
+
+  /**
+   * К-250: высокий худой дроид охраны — матово-чёрный корпус, куполообразная
+   * голова с круглыми светящимися глазами, тонкие конечности с шарнирами.
+   */
+  buildDroid(parts) {
+    const M = (o) => new THREE.MeshStandardMaterial(o);
+    const body = M({ color: 0x121419, metalness: 0.6, roughness: 0.56 });
+    const dark = M({ color: 0x0a0c0f, metalness: 0.5, roughness: 0.66 });
+    const joint = M({ color: 0x555b62, metalness: 0.92, roughness: 0.3 });
+    const accent = M({ color: 0x4f4839, metalness: 0.35, roughness: 0.7 });
+    const eyeM = M({ color: 0x020308, emissive: 0x1a35d4, emissiveIntensity: 2.6 }); // тёмно-синее свечение
+    const coreM = M({ color: 0x000000, emissive: 0x33e8ff, emissiveIntensity: 3 });
+    const { bones, W, attach, box, ball, seg } = this._bodyKit(parts);
 
     // --- голова: купол, лицевой блок, глаза ---
     const hd = W(bones.head);
@@ -233,6 +250,82 @@ export class Player {
       ball(ft, 0.038, joint, W(ft));
       const fp = W(ft);
       box(ft, 0.095, 0.06, 0.21, dark, new THREE.Vector3(fp.x, 0.05, fp.z + 0.055));
+    }
+  }
+
+  /**
+   * Голубой тролль: круглая голова с ушами, носом-картошкой и клыками,
+   * пузо, массивные синие конечности и босые ступни.
+   */
+  buildTroll(parts) {
+    const M = (o) => new THREE.MeshStandardMaterial(o);
+    const skin = M({ color: 0x5c9fd6, roughness: 0.85, metalness: 0.05 });
+    const skinDark = M({ color: 0x3d7fc4, roughness: 0.8, metalness: 0.05 });
+    const cloth = M({ color: 0x4a3826, roughness: 0.95 });
+    const tuskM = M({ color: 0xf2ecd8, roughness: 0.4, metalness: 0.05 });
+    const eyeM = M({ color: 0x050300, emissive: 0xffb31a, emissiveIntensity: 4 });
+    const { bones, W, attach, box, ball, seg } = this._bodyKit(parts);
+
+    // --- голова ---
+    const hd = W(bones.head);
+    const skull = ball(bones.head, 0.15, skin, hd.clone().add(new THREE.Vector3(0, 0.09, 0.01)));
+    skull.scale.multiply(new THREE.Vector3(1, 0.95, 1.02));
+    for (const sx of [-1, 1]) {
+      const ear = attach(
+        bones.head,
+        new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.22, 8), skin),
+        hd.clone().add(new THREE.Vector3(sx * 0.17, 0.12, -0.01)),
+        new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0, -sx * (Math.PI / 2 - 0.4)))
+      );
+      ear.scale.multiply(new THREE.Vector3(1, 1, 0.45));
+      const eye = ball(bones.head, 0.026, eyeM, hd.clone().add(new THREE.Vector3(sx * 0.052, 0.105, 0.135)));
+      eye.castShadow = false;
+      attach(
+        bones.head,
+        new THREE.Mesh(new THREE.ConeGeometry(0.022, 0.1, 6), tuskM),
+        hd.clone().add(new THREE.Vector3(sx * 0.055, 0.0, 0.14)),
+        new THREE.Quaternion().setFromEuler(new THREE.Euler(0.28, 0, -sx * 0.15))
+      );
+    }
+    const nose = ball(bones.head, 0.047, skinDark, hd.clone().add(new THREE.Vector3(0, 0.06, 0.16)));
+    nose.scale.multiply(new THREE.Vector3(1, 0.85, 0.9));
+    box(bones.head, 0.17, 0.04, 0.06, skinDark, hd.clone().add(new THREE.Vector3(0, 0.145, 0.125))); // бровь
+
+    // --- торс: пузо и грудь ---
+    const c = W(bones.chest);
+    const belly = ball(bones.chest, 0.21, skin, c.clone().add(new THREE.Vector3(0, 0.02, 0.015)));
+    belly.scale.multiply(new THREE.Vector3(1, 0.95, 0.85));
+    box(bones.chest, 0.36, 0.17, 0.24, skin, c.clone().add(new THREE.Vector3(0, 0.16, 0)));
+    const s = W(bones.spine);
+    const gut = ball(bones.spine, 0.17, skin, s.clone().add(new THREE.Vector3(0, 0.1, 0.02)));
+    gut.scale.multiply(new THREE.Vector3(1, 0.9, 0.8));
+
+    // --- таз: набедренная повязка ---
+    const h = W(bones.hips);
+    box(bones.hips, 0.3, 0.18, 0.2, cloth, h.clone().add(new THREE.Vector3(0, 0, 0)));
+
+    // --- конечности ---
+    for (const side of ['l', 'r']) {
+      const sgn = side === 'l' ? 1 : -1;
+      const ua = bones['upperarm' + side];
+      const la = bones['lowerarm' + side];
+      const wr = bones['wrist' + side];
+      const ha = bones['hand' + side];
+      ball(ua, 0.085, skin, W(ua));
+      seg(ua, la, 0.058, skin);
+      ball(la, 0.062, skin, W(la));
+      seg(la, wr, 0.062, skin);
+      box(ha, 0.11, 0.12, 0.09, skinDark, W(ha).add(new THREE.Vector3(sgn * 0.05, -0.005, 0)));
+
+      const ul = bones['upperleg' + side];
+      const ll = bones['lowerleg' + side];
+      const ft = bones['foot' + side];
+      ball(ul, 0.08, cloth, W(ul));
+      seg(ul, ll, 0.075, cloth);
+      ball(ll, 0.066, skin, W(ll));
+      seg(ll, ft, 0.06, skin);
+      const fp = W(ft);
+      box(ft, 0.12, 0.07, 0.24, skinDark, new THREE.Vector3(fp.x, 0.05, fp.z + 0.06));
     }
   }
 

@@ -17,11 +17,15 @@ import { EnemyManager } from './entities/Enemy.js';
 import { Boss } from './entities/Boss.js';
 
 const FIXED_DT = 1 / 60;
-// миссии по районам: состав волн — { тип: количество }
+// 5 уровней — миссии по районам: состав волн — { тип: количество }
 const STAGES = [
   { district: 'plaza', waves: [{ shambler: 4 }, { shambler: 4, runner: 2 }] },
   { district: 'industrial', waves: [{ shambler: 3, runner: 3 }, { shambler: 4, spitter: 2 }] },
   { district: 'residential', waves: [{ runner: 4, spitter: 2 }, { shambler: 5, runner: 3, spitter: 2 }] },
+  {
+    district: 'market',
+    waves: [{ runner: 5, spitter: 2 }, { shambler: 5, runner: 3, spitter: 2 }, { shambler: 6, runner: 4, spitter: 3 }],
+  },
   { district: 'hive', boss: true },
 ];
 const PARAMS = new URLSearchParams(location.search);
@@ -109,6 +113,20 @@ async function boot() {
   const player = new Player(assets.models.knight, engine.scene, physics, cameraRig, vfx, audio, hud);
   player.setSpawn(level.playerSpawn);
   cameraRig.playerModel = player.root;
+
+  // выбор героя: К-250 или голубой тролль (сохраняется в браузере)
+  const hButtons = [...document.querySelectorAll('.h-btn')];
+  const markHero = (k) => hButtons.forEach((b) => b.classList.toggle('active', b.dataset.h === k));
+  const startHero = localStorage.getItem('db2.hero') || 'k250';
+  player.setHero(startHero);
+  markHero(startHero);
+  hButtons.forEach((b) =>
+    b.addEventListener('click', () => {
+      player.setHero(b.dataset.h);
+      localStorage.setItem('db2.hero', b.dataset.h);
+      markHero(b.dataset.h);
+    })
+  );
 
   const enemies = new EnemyManager(
     { minion: assets.models.minion, rogue: assets.models.rogue, mage: assets.models.mage },
@@ -205,7 +223,7 @@ async function boot() {
     if (stage.boss) {
       // финальный этап: дойти до комплекса HIVE
       if (stagePhase === 'travel') {
-        hud.objective(`ИДИТЕ К ЦЕЛИ: ${district.name}`);
+        hud.objective(`УРОВЕНЬ ${stageIdx + 1}/${STAGES.length} · ЦЕЛЬ: ${district.name}`);
         if (player.pos.distanceTo(district.center) < district.radius) {
           bossStarted = true;
           hud.banner('ИНЖЕНЕР ХААС');
@@ -218,7 +236,7 @@ async function boot() {
     }
 
     if (stagePhase === 'travel') {
-      hud.objective(`ИДИТЕ К ЦЕЛИ: ${district.name}`);
+      hud.objective(`УРОВЕНЬ ${stageIdx + 1}/${STAGES.length} · ЦЕЛЬ: ${district.name}`);
       if (player.pos.distanceTo(district.center) < district.radius) {
         stagePhase = 'combat';
         stageWave = 0;
@@ -241,8 +259,8 @@ async function boot() {
             stageIdx++;
             stagePhase = 'travel';
             const next = level.districts[STAGES[stageIdx].district];
-            hud.banner(`СЕКТОР ЗАЧИЩЕН`);
-            hud.objective(`ИДИТЕ К ЦЕЛИ: ${next.name}`);
+            hud.banner(`УРОВЕНЬ ${stageIdx} ПРОЙДЕН`);
+            hud.objective(`УРОВЕНЬ ${stageIdx + 1}/${STAGES.length} · ЦЕЛЬ: ${next.name}`);
             // заставка №2: середина кампании (после промзоны)
             if (stageIdx === 2) {
               state = 'cine';
@@ -322,7 +340,7 @@ async function boot() {
       hud.setHealth(1);
       hud.setAmmo(30, false);
       hud.setKits(player.kits, player.maxKits);
-      hud.objective('ИДИТЕ К ЦЕЛИ: ПЛОЩАДЬ');
+      hud.objective('УРОВЕНЬ 1/5 · ЦЕЛЬ: ПЛОЩАДЬ');
       state = 'play';
     });
   });

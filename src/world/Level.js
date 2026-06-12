@@ -43,6 +43,7 @@ export class Level {
       plaza: { name: 'ПЛОЩАДЬ', center: new THREE.Vector3(0, 0, 0), radius: 24 },
       industrial: { name: 'ПРОМЗОНА', center: new THREE.Vector3(60, 0, 8), radius: 24 },
       residential: { name: 'ЖИЛОЙ КВАРТАЛ', center: new THREE.Vector3(-60, 0, 10), radius: 24 },
+      market: { name: 'СТАРЫЙ РЫНОК', center: new THREE.Vector3(58, 0, -48), radius: 24 },
       hive: { name: 'КОМПЛЕКС HIVE', center: new THREE.Vector3(0, 0, -66), radius: 24 },
     };
 
@@ -92,6 +93,7 @@ export class Level {
     this.addRoad(0, 62, 0, -78, 7); // главная: лагерь -> площадь -> HIVE
     this.addRoad(0, 0, 62, 8, 6.5); // на восток, в промзону
     this.addRoad(0, 0, -62, 10, 6.5); // на запад, в жилой квартал
+    this.addRoad(62, 8, 58, -48, 6); // из промзоны на юг, к старому рынку
     // грунтовые тропинки
     this.addPath(6, 14, 26, 34, 2.2);
     this.addPath(-8, -18, -34, -40, 2.2);
@@ -196,6 +198,39 @@ export class Level {
     this.addFire(-63, -2, res);
     this.addLamp(-56, 16, true, res);
     this.addLamp(-70, 0, false, res);
+
+    // ================= СТАРЫЙ РЫНОК (юго-восток) =================
+    const market = this.zone(58, -48, 40);
+    const stalls = [
+      [50, -42, 0.2], [56, -41, 0.15], [62, -43, -0.1],
+      [50, -52, 1.75], [57, -54, 1.6], [64, -52, 1.8],
+    ];
+    for (const [x, z, rot] of stalls) {
+      this.addStall(x, z, rot, market);
+      this.mapRect(x, z, 3.2, 2, rot, '#8a6a3a');
+    }
+    this.addContainers(market, [
+      [44, -58, 0.4, false],
+      [70, -46, 1.1, false],
+      [71.5, -44.8, 1.0, true],
+    ]);
+    this.addBarriers(market, [[48, -47, 0.3], [60, -48, -0.5], [66, -58, 1.0]]);
+    this.addRubbleSpots(market, [[46, -38, 1.8], [68, -54, 2.0], [54, -60, 1.6]]);
+    this.addCarcass(52, -47);
+    this.addCrate(47, -50, 0.6, market);
+    this.addCrate(63, -39, 1.3, market);
+    this.addFire(55, -47, market);
+    this.addFire(66, -50, market);
+    this.addLamp(52, -44, true, market);
+    this.addLamp(62, -56, false, market);
+    const marketBuildings = [
+      [42, -66, 11, 11, 10, 0.2, 'brick_wall_09'],
+      [74, -60, 12, 12, 10, -0.15, 'concrete_panels'],
+    ];
+    for (const [x, z, w, h, d, rot, mat] of marketBuildings) {
+      this.addRuinedBuilding(x, z, w, h, d, rot, mat, market);
+      this.mapRect(x, z, w, d, rot, '#6a7077');
+    }
 
     // ================= КОМПЛЕКС HIVE (север) =================
     const hive = this.zone(0, -66, 42);
@@ -1036,6 +1071,35 @@ export class Level {
         kind: 'lamp', mat: headMat, t: 0, on: true,
       });
     }
+  }
+
+  /** Рыночный прилавок: столешница, стойки и тканевый навес. */
+  addStall(x, z, rot, zoneGroup = null) {
+    const g = new THREE.Group();
+    const wood = new THREE.MeshStandardMaterial({ color: 0x6a4a2c, roughness: 0.9 });
+    const cloth = new THREE.MeshStandardMaterial({
+      color: [0x8a3a30, 0x3a5a6a, 0x6a6a30][Math.floor(Math.random() * 3)],
+      roughness: 0.95,
+    });
+    const counter = new THREE.Mesh(new THREE.BoxGeometry(3, 0.9, 1.1), wood);
+    counter.position.y = 0.45;
+    counter.castShadow = true;
+    g.add(counter);
+    for (const sx of [-1.35, 1.35]) {
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, 2.2, 6), wood);
+      post.position.set(sx, 1.1, -0.4);
+      post.castShadow = true;
+      g.add(post);
+    }
+    const canopy = new THREE.Mesh(new THREE.BoxGeometry(3.3, 0.07, 1.7), cloth);
+    canopy.position.set(0, 2.2, 0.1);
+    canopy.rotation.x = 0.18;
+    canopy.castShadow = true;
+    g.add(canopy);
+    g.position.set(x, 0, z);
+    g.rotation.y = rot;
+    this.parentOf(zoneGroup).add(g);
+    this.physics.addBox(x, 0.45, z, 3, 0.9, 1.1, rot);
   }
 
   addBossGate(x, z, zoneGroup = null) {
