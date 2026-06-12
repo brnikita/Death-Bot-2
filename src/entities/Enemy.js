@@ -41,8 +41,8 @@ export const ENEMY_TYPES = {
   },
 };
 
-// дистанция атаки до ЦЕНТРА игрока: радиус капсулы гиганта ~1.25 + замах ~2.3
-const ATTACK_RANGE = 3.6;
+// дистанция атаки до центра игрока: радиус капсулы ~0.42 + замах ~2.3
+const ATTACK_RANGE = 2.7;
 
 let nextId = 1;
 
@@ -208,7 +208,7 @@ class Enemy {
       if (!this.attackHitDone && this.t > this.type.castTime * 0.55) {
         this.attackHitDone = true;
         const origin = this.pos.clone().add(new THREE.Vector3(0, 1.4, 0));
-        const target = player.pos.clone().add(new THREE.Vector3(0, 3.4, 0)); // в корпус гиганта
+        const target = player.pos.clone().add(new THREE.Vector3(0, 1.4, 0)); // в корпус
         const dir = target.sub(origin).normalize();
         this.mgr.spawnProjectile(origin, dir, this.type.damage);
         this.mgr.audio.play3d('zombie_attack', this.pos, { volume: 0.5, rate: 1.3 });
@@ -434,7 +434,7 @@ export class EnemyManager {
       p.life -= dt;
       p.m.position.addScaledVector(p.vel, dt);
       let hit = false;
-      if (!player.dead && p.m.position.distanceTo(player.pos.clone().add(new THREE.Vector3(0, 3.4, 0))) < 1.9) {
+      if (!player.dead && p.m.position.distanceTo(player.pos.clone().add(new THREE.Vector3(0, 1.4, 0))) < 1.0) {
         player.takeDamage(p.damage, p.m.position);
         hit = true;
       }
@@ -452,7 +452,7 @@ export class EnemyManager {
       p.t += dt;
       p.m.rotation.y += dt * 2.4;
       p.m.position.y = 0.7 + Math.sin(p.t * 3) * 0.12;
-      if (!player.dead && p.m.position.distanceTo(player.pos) < 3.4) {
+      if (!player.dead && p.m.position.distanceTo(player.pos) < 1.8) {
         player.hp = Math.min(player.maxHp, player.hp + 25);
         player.hud.setHealth(player.hp / player.maxHp);
         this.audio.play2d('pickup', { volume: 0.7 });

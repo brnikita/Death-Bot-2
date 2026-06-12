@@ -3,15 +3,15 @@ import { RAPIER } from '../core/Physics.js';
 
 const UPPER_RE = /(spine|chest|head|arm|wrist|hand|slot)/i;
 
-// Гигант: К-250 в ~5 раз выше обычного зомби (модель ×SIZE, физика и
-// скорости масштабированы соответственно).
-const SIZE = 3.9;
-const RUN_SPEED = 10;
-const SPRINT_SPEED = 15;
-const AIM_SPEED = 6;
-const ACCEL = 40;
-const JUMP_VEL = 14;
-const GRAVITY = 30;
+// К-250 ~2.2 м — заметно выше зомби, но не гигант (модель ×SIZE,
+// физика и скорости масштабированы соответственно).
+const SIZE = 1.3;
+const RUN_SPEED = 6;
+const SPRINT_SPEED = 8.8;
+const AIM_SPEED = 3.6;
+const ACCEL = 34;
+const JUMP_VEL = 9.6;
+const GRAVITY = 24;
 const FIRE_INTERVAL = 0.115;
 const MAG_SIZE = 30;
 const RELOAD_TIME = 1.7;
@@ -82,10 +82,9 @@ export class Player {
       RAPIER.ColliderDesc.capsule(0.52 * SIZE, 0.32 * SIZE).setTranslation(0, 0.85 * SIZE, 0),
       this.body
     );
-    this.controller = physics.world.createCharacterController(0.12);
-    // гигант перешагивает машины, мешки и завалы
-    this.controller.enableAutostep(1.6, 0.8, true);
-    this.controller.enableSnapToGround(1.3);
+    this.controller = physics.world.createCharacterController(0.07);
+    this.controller.enableAutostep(0.58, 0.28, true);
+    this.controller.enableSnapToGround(0.5);
     this.controller.setMaxSlopeClimbAngle((50 * Math.PI) / 180);
     this.controller.setApplyImpulsesToDynamicBodies(false);
 
@@ -374,7 +373,7 @@ export class Player {
       }, 200);
     }
     this.velY -= GRAVITY * dt;
-    if (this.grounded && this.velY < -5) this.velY = -5;
+    if (this.grounded && this.velY < -3.5) this.velY = -3.5;
 
     // ---- move through rapier character controller ----
     const move = {
@@ -392,11 +391,11 @@ export class Player {
     // computedGrounded is unreliable while the controller keeps its offset gap —
     // back it up with a short downward ray (skipped while ascending after a jump)
     let rayGrounded = false;
-    if (this.velY <= 1.5) {
+    if (this.velY <= 0.8) {
       rayGrounded = !!this.physics.raycast(
-        { x: this.pos.x, y: this.pos.y + 0.8, z: this.pos.z },
+        { x: this.pos.x, y: this.pos.y + 0.3, z: this.pos.z },
         { x: 0, y: -1, z: 0 },
-        1.65,
+        0.62,
         this.collider
       );
     }
@@ -405,8 +404,8 @@ export class Player {
     if (this.grounded && wasAirborneLong) {
       this.jumpPhase = 'land';
       this.landT = 0.22;
-      this.cameraRig.addTrauma(0.22); // приземление многотонной машины
-      this.audio.play3d('footstep', this.pos, { volume: 1, rate: 0.55 });
+      this.cameraRig.addTrauma(0.1);
+      this.audio.play3d('footstep', this.pos, { volume: 0.85, rate: 0.7 });
     }
     this.body.setNextKinematicTranslation({ x: this.pos.x, y: this.pos.y, z: this.pos.z });
 
@@ -486,19 +485,18 @@ export class Player {
           anim = localR > 0 ? 'Running_Strafe_Right' : 'Running_Strafe_Left';
         } else if (localF < -0.5) {
           anim = 'Walking_Backwards';
-          ts = THREE.MathUtils.clamp(speed / 4.8, 0.6, 1.5);
+          ts = THREE.MathUtils.clamp(speed / 2.9, 0.6, 1.5);
         }
         this.setBase(anim, 0.16, ts);
       }
 
-      // шаги: тяжёлые и редкие
+      // шаги
       const speedNow = Math.hypot(this.vel.x, this.vel.z);
-      if (speedNow > 2) {
+      if (speedNow > 1.3) {
         this.footT -= dt * speedNow;
         if (this.footT <= 0) {
-          this.footT = 4.4;
-          this.audio.play3d('footstep', this.pos, { volume: 0.7, rate: 0.6 });
-          this.cameraRig.addTrauma(0.025);
+          this.footT = 2.5;
+          this.audio.play3d('footstep', this.pos, { volume: 0.45, rate: 0.95 });
         }
       }
     }
@@ -562,9 +560,9 @@ export class Player {
       end = origin.clone().addScaledVector(dir, 120);
     }
 
-    this.vfx.tracer(muzzlePos, end, 0x7fe8ff, 3);
-    this.vfx.muzzle(muzzlePos, 0x9fd8ff, 3.2);
-    this.audio.play3d('shot', muzzlePos, { volume: 0.75, rate: 0.85 });
+    this.vfx.tracer(muzzlePos, end, 0x7fe8ff, 1.4);
+    this.vfx.muzzle(muzzlePos, 0x9fd8ff, 1.4);
+    this.audio.play3d('shot', muzzlePos, { volume: 0.75 });
     this.cameraRig.pitchKick(0.0095);
     this.cameraRig.addTrauma(0.06);
   }

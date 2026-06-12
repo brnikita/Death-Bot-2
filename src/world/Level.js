@@ -67,7 +67,7 @@ export class Level {
     for (const z of this.zones) {
       const dx = playerPos.x - z.cx;
       const dz = playerPos.z - z.cz;
-      z.group.visible = dx * dx + dz * dz < (z.r + 70) * (z.r + 70);
+      z.group.visible = dx * dx + dz * dz < (z.r + 58) * (z.r + 58);
     }
   }
 

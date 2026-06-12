@@ -28,7 +28,7 @@ export class VFX {
 
     // один постоянный источник света для вспышек выстрелов: создание/удаление
     // PointLight на лету меняет число источников и перекомпилирует все шейдеры
-    this.flashLight = new THREE.PointLight(0xffffff, 0, 14, 2);
+    this.flashLight = new THREE.PointLight(0xffffff, 0, 9, 2);
     this.flashLight.position.y = -100;
     scene.add(this.flashLight);
   }

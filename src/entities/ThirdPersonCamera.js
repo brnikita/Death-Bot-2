@@ -10,8 +10,8 @@ export class ThirdPersonCamera {
     this.physics = physics;
     this.yaw = 0; // forward = -z: player spawns at +z looking toward the arena center
     this.pitch = 0.22;
-    this.dist = 16;
-    this.curDist = 16;
+    this.dist = 7;
+    this.curDist = 7;
     this.trauma = 0;
     this.fov = 62;
     this.aiming = false;
@@ -43,15 +43,15 @@ export class ThirdPersonCamera {
     this.trauma = Math.max(0, this.trauma - dt * 1.6);
     this._noiseT += dt * 30;
 
-    // герой — гигант (~6.5 м): камера выше и заметно дальше
-    const targetDist = this.aiming ? 9.5 : 16;
+    // герой ~2.2 м: камера за плечом
+    const targetDist = this.aiming ? 4.2 : 7;
     this.dist = THREE.MathUtils.damp(this.dist, targetDist, 10, dt);
 
     // pivot: above the shoulders, offset to the right of view
     const fwd = new THREE.Vector3(-Math.sin(this.yaw), 0, -Math.cos(this.yaw));
     const right = new THREE.Vector3(-fwd.z, 0, fwd.x);
     // strong shoulder offset keeps the hero's body clear of the crosshair line
-    this._pivot.copy(playerPos).add(new THREE.Vector3(0, 5.4, 0)).addScaledVector(right, this.aiming ? 3.6 : 2.8);
+    this._pivot.copy(playerPos).add(new THREE.Vector3(0, 1.9, 0)).addScaledVector(right, this.aiming ? 1.4 : 1.05);
 
     // desired camera offset (spherical around pivot)
     const cp = Math.cos(this.pitch);
@@ -67,20 +67,20 @@ export class ThirdPersonCamera {
       { x: this._pivot.x, y: this._pivot.y, z: this._pivot.z },
       { x: offsetDir.x, y: offsetDir.y, z: offsetDir.z },
       this.dist,
-      0.45,
+      0.25,
       playerCollider
     );
-    if (toi !== null && toi < dist) dist = Math.max(1.0, toi - 0.08);
+    if (toi !== null && toi < dist) dist = Math.max(0.45, toi - 0.05);
     this.curDist = Math.min(THREE.MathUtils.damp(this.curDist, dist, 18, dt), dist);
 
     const camPos = this._pivot.clone().addScaledVector(offsetDir, this.curDist);
     this.camera.position.copy(camPos);
 
     // camera pressed against a wall ends up inside the character — hide it
-    if (this.playerModel) this.playerModel.visible = this.curDist > 2.4;
+    if (this.playerModel) this.playerModel.visible = this.curDist > 1.35;
 
     // look slightly above pivot forward
-    const lookTarget = this._pivot.clone().addScaledVector(fwd, 12).add(new THREE.Vector3(0, Math.sin(this.pitch) * -12, 0));
+    const lookTarget = this._pivot.clone().addScaledVector(fwd, 5).add(new THREE.Vector3(0, Math.sin(this.pitch) * -5, 0));
     this.camera.lookAt(lookTarget);
 
     // screen shake (rotational noise scaled by trauma^2)
