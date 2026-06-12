@@ -25,9 +25,15 @@ export class VFX {
 
     this.tracerGeo = new THREE.CylinderGeometry(0.018, 0.018, 1, 5, 1, true);
     this.flashTex = flashTexture();
+
+    // один постоянный источник света для вспышек выстрелов: создание/удаление
+    // PointLight на лету меняет число источников и перекомпилирует все шейдеры
+    this.flashLight = new THREE.PointLight(0xffffff, 0, 14, 2);
+    this.flashLight.position.y = -100;
+    scene.add(this.flashLight);
   }
 
-  tracer(from, to, color = 0x7fe8ff) {
+  tracer(from, to, color = 0x7fe8ff, width = 1) {
     const len = from.distanceTo(to);
     if (len < 0.1) return;
     const mat = new THREE.MeshBasicMaterial({
@@ -41,12 +47,12 @@ export class VFX {
     const dir = to.clone().sub(from).normalize();
     m.quaternion.setFromUnitVectors(UP, dir);
     m.position.copy(from).addScaledVector(dir, len / 2);
-    m.scale.set(1, len, 1);
+    m.scale.set(width, len, width);
     this.scene.add(m);
     this.tracers.push({ m, life: 0.06, max: 0.06 });
   }
 
-  muzzle(pos, color = 0x9fd8ff) {
+  muzzle(pos, color = 0x9fd8ff, size = 1) {
     const mat = new THREE.SpriteMaterial({
       map: this.flashTex,
       color,
@@ -56,14 +62,14 @@ export class VFX {
     });
     const s = new THREE.Sprite(mat);
     s.position.copy(pos);
-    s.scale.setScalar(0.5 + Math.random() * 0.25);
+    s.scale.setScalar((0.5 + Math.random() * 0.25) * size);
     s.material.rotation = Math.random() * Math.PI;
     this.scene.add(s);
 
-    const light = new THREE.PointLight(color, 26, 8, 2);
-    light.position.copy(pos);
-    this.scene.add(light);
-    this.flashes.push({ s, light, life: 0.055 });
+    this.flashLight.color.setHex(color);
+    this.flashLight.position.copy(pos);
+    this.flashLight.intensity = 26;
+    this.flashes.push({ s, life: 0.055 });
   }
 
   burst(pos, normal, color = 0xffaa44, count = 12, speed = 4) {
@@ -129,12 +135,12 @@ export class VFX {
         this.tracers.splice(i, 1);
       }
     }
+    this.flashLight.intensity = Math.max(0, this.flashLight.intensity - dt * 480);
     for (let i = this.flashes.length - 1; i >= 0; i--) {
       const f = this.flashes[i];
       f.life -= dt;
-      f.light.intensity *= 0.7;
       if (f.life <= 0) {
-        this.scene.remove(f.s, f.light);
+        this.scene.remove(f.s);
         f.s.material.dispose();
         this.flashes.splice(i, 1);
       }

@@ -3,44 +3,19 @@ import { RAPIER } from '../core/Physics.js';
 
 const UPPER_RE = /(spine|chest|head|arm|wrist|hand|slot)/i;
 
-const RUN_SPEED = 5.2;
-const SPRINT_SPEED = 7.4;
-const AIM_SPEED = 3.0;
-const ACCEL = 30;
-const JUMP_VEL = 8.6;
-const GRAVITY = 22;
+// Гигант: К-250 в ~5 раз выше обычного зомби (модель ×SIZE, физика и
+// скорости масштабированы соответственно).
+const SIZE = 3.9;
+const RUN_SPEED = 10;
+const SPRINT_SPEED = 15;
+const AIM_SPEED = 6;
+const ACCEL = 40;
+const JUMP_VEL = 14;
+const GRAVITY = 30;
 const FIRE_INTERVAL = 0.115;
 const MAG_SIZE = 30;
 const RELOAD_TIME = 1.7;
 const DAMAGE = 26;
-
-function buildBlaster() {
-  const g = new THREE.Group();
-  const dark = new THREE.MeshStandardMaterial({ color: 0x23282e, metalness: 0.85, roughness: 0.35 });
-  const body = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.16, 0.62), dark);
-  body.position.z = -0.18;
-  g.add(body);
-  const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.034, 0.42, 10), dark);
-  barrel.rotation.x = Math.PI / 2;
-  barrel.position.set(0, 0.045, -0.66);
-  g.add(barrel);
-  const core = new THREE.Mesh(
-    new THREE.BoxGeometry(0.024, 0.06, 0.34),
-    new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0x33e8ff, emissiveIntensity: 3.5 })
-  );
-  core.position.set(0.052, 0.02, -0.2);
-  g.add(core);
-  const stock = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.11, 0.2), dark);
-  stock.position.set(0, -0.02, 0.16);
-  g.add(stock);
-  g.traverse((o) => {
-    if (o.isMesh) o.castShadow = true;
-  });
-  const muzzle = new THREE.Object3D();
-  muzzle.position.set(0, 0.045, -0.9);
-  g.add(muzzle);
-  return { gun: g, muzzle };
-}
 
 export class Player {
   constructor(gltf, scene, physics, camera, vfx, audio, hud) {
@@ -70,24 +45,25 @@ export class Player {
 
     // ---------- visual ----------
     this.model = gltf.scene;
-    this.model.scale.setScalar(1.0);
-    this.restyleAsRobot();
+    this.model.scale.setScalar(1.15); // пропорции дроида собраны на этом масштабе
+    this.buildDroid();
+    this.model.scale.setScalar(1.15 * SIZE); // и затем увеличены целиком
     this.root = new THREE.Group();
     this.root.add(this.model);
     scene.add(this.root);
 
-    // weapon in right hand slot
-    const { gun, muzzle } = buildBlaster();
-    this.muzzle = muzzle;
-    // GLTFLoader strips dots from node names: 'handslot.r' -> 'handslotr'
-    let slot = null;
+    // оружия нет — выстрелы идут из ладони правой руки
+    this.muzzle = new THREE.Object3D();
+    let hand = null;
     this.model.traverse((o) => {
-      if (!slot && /^handslot\.?r$/i.test(o.name)) slot = o;
+      if (!hand && /^handr$/i.test(o.name)) hand = o;
     });
-    if (slot) slot.add(gun);
-    else this.model.add(gun);
-    gun.scale.setScalar(1.8); // KayKit style: chunky oversized weapon reads well on chibi rigs
-    gun.rotation.set(0, -Math.PI / 2, 0); // slot's forward axis is +X; our barrel is -Z
+    if (hand) {
+      this.muzzle.position.set(-0.12, 0, 0); // чуть за ладонь по оси руки
+      hand.add(this.muzzle);
+    } else {
+      this.model.add(this.muzzle);
+    }
 
     // ---------- animation ----------
     this.mixer = new THREE.AnimationMixer(this.model);
@@ -103,12 +79,13 @@ export class Player {
     const desc = RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation(0, 1.2, 24);
     this.body = physics.world.createRigidBody(desc);
     this.collider = physics.world.createCollider(
-      RAPIER.ColliderDesc.capsule(0.55, 0.34).setTranslation(0, 0.9, 0),
+      RAPIER.ColliderDesc.capsule(0.52 * SIZE, 0.32 * SIZE).setTranslation(0, 0.85 * SIZE, 0),
       this.body
     );
-    this.controller = physics.world.createCharacterController(0.06);
-    this.controller.enableAutostep(0.45, 0.25, true);
-    this.controller.enableSnapToGround(0.45);
+    this.controller = physics.world.createCharacterController(0.12);
+    // гигант перешагивает машины, мешки и завалы
+    this.controller.enableAutostep(1.6, 0.8, true);
+    this.controller.enableSnapToGround(1.3);
     this.controller.setMaxSlopeClimbAngle((50 * Math.PI) / 180);
     this.controller.setApplyImpulsesToDynamicBodies(false);
 
@@ -124,45 +101,119 @@ export class Player {
     this.body.setNextKinematicTranslation({ x: p.x, y: p.y, z: p.z });
   }
 
-  restyleAsRobot() {
-    const armor = new THREE.MeshStandardMaterial({
-      color: 0x707d8a,
-      metalness: 0.88,
-      roughness: 0.34,
-      envMapIntensity: 1.1,
-    });
-    const carbon = new THREE.MeshStandardMaterial({ color: 0x23262b, metalness: 0.65, roughness: 0.55 });
-    // the robot's "face" glows cyan through the helmet slit
-    const face = new THREE.MeshStandardMaterial({
-      color: 0x05161a,
-      emissive: 0x22d8ff,
-      emissiveIntensity: 1.6,
-      metalness: 0.2,
-      roughness: 0.4,
-    });
-    const cape = new THREE.MeshStandardMaterial({ color: 0x47201c, metalness: 0.0, roughness: 0.95 });
-    const HIDE = /shield|sword|offhand/i;
+  /**
+   * К-250: высокий худой дроид охраны — матово-чёрный корпус, куполообразная
+   * голова с круглыми светящимися глазами, тонкие конечности с шарнирами.
+   * Меши рыцаря скрываются, детали дроида крепятся прямо к костям скелета,
+   * поэтому все анимации (бег, прыжок, стрельба) работают без изменений.
+   */
+  buildDroid() {
+    const M = (o) => new THREE.MeshStandardMaterial(o);
+    const body = M({ color: 0x121419, metalness: 0.6, roughness: 0.56 });
+    const dark = M({ color: 0x0a0c0f, metalness: 0.5, roughness: 0.66 });
+    const joint = M({ color: 0x555b62, metalness: 0.92, roughness: 0.3 });
+    const accent = M({ color: 0x4f4839, metalness: 0.35, roughness: 0.7 });
+    const eyeM = M({ color: 0x05070a, emissive: 0xeef6ff, emissiveIntensity: 3 });
+    const coreM = M({ color: 0x000000, emissive: 0x33e8ff, emissiveIntensity: 3 });
 
+    // спрятать всё родное тело рыцаря — скелет продолжает анимироваться
     this.model.traverse((o) => {
-      if (HIDE.test(o.name)) o.visible = false;
-      if (!o.isMesh && !o.isSkinnedMesh) return;
-      o.castShadow = true;
-      o.frustumCulled = false;
-      if (/cape/i.test(o.name)) o.material = cape;
-      else if (/head/i.test(o.name)) o.material = face;
-      else if (/pete|body/i.test(o.name)) o.material = carbon;
-      else o.material = armor;
+      if (o.isMesh || o.isSkinnedMesh) o.visible = false;
     });
-    // chest core
-    const chest = this.model.getObjectByName('chest');
-    if (chest) {
-      const core = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.05, 0.05, 0.03, 12),
-        new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0x33e8ff, emissiveIntensity: 3 })
-      );
-      core.rotation.x = Math.PI / 2;
-      core.position.set(0, 0.22, 0.18);
-      chest.add(core);
+    this.model.updateMatrixWorld(true);
+
+    const bones = {};
+    this.model.traverse((o) => {
+      if (o.isBone) bones[o.name] = o;
+    });
+    const W = (b) => b.getWorldPosition(new THREE.Vector3());
+    const UPV = new THREE.Vector3(0, 1, 0);
+
+    // детали задаются в мировых координатах (поза покоя, лицом к +Z),
+    // затем конвертируются в локальное пространство кости
+    const attach = (b, mesh, wpos, wquat = null) => {
+      b.add(mesh);
+      mesh.position.copy(b.worldToLocal(wpos.clone()));
+      const bq = b.getWorldQuaternion(new THREE.Quaternion()).invert();
+      mesh.quaternion.copy(wquat ? bq.multiply(wquat) : bq);
+      mesh.scale.multiplyScalar(1 / b.getWorldScale(new THREE.Vector3()).x);
+      mesh.castShadow = true;
+      return mesh;
+    };
+    const box = (b, w, h, d, mat, wpos) =>
+      attach(b, new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat), wpos);
+    const ball = (b, r, mat, wpos) =>
+      attach(b, new THREE.Mesh(new THREE.SphereGeometry(r, 12, 10), mat), wpos);
+    const seg = (bA, bB, r, mat) => {
+      const a = W(bA);
+      const dir = W(bB).sub(a);
+      const len = dir.length();
+      const mesh = new THREE.Mesh(new THREE.CylinderGeometry(r, r, len, 10), mat);
+      const q = new THREE.Quaternion().setFromUnitVectors(UPV, dir.clone().normalize());
+      return attach(bA, mesh, a.addScaledVector(dir, 0.5), q);
+    };
+
+    // --- голова: купол, лицевой блок, глаза ---
+    const hd = W(bones.head);
+    attach(bones.head, new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.038, 0.18, 10), dark), hd.clone().add(new THREE.Vector3(0, -0.06, 0)));
+    const dome = new THREE.Mesh(new THREE.SphereGeometry(0.135, 20, 16), body);
+    dome.scale.set(0.95, 1.12, 1.02);
+    attach(bones.head, dome, hd.clone().add(new THREE.Vector3(0, 0.1, 0.01)));
+    box(bones.head, 0.115, 0.1, 0.09, dark, hd.clone().add(new THREE.Vector3(0, 0.015, 0.07)));
+    for (const sx of [-1, 1]) {
+      ball(bones.head, 0.031, dark, hd.clone().add(new THREE.Vector3(sx * 0.047, 0.105, 0.112)));
+      const eye = ball(bones.head, 0.023, eyeM, hd.clone().add(new THREE.Vector3(sx * 0.047, 0.105, 0.125)));
+      eye.castShadow = false;
+    }
+
+    // --- торс ---
+    const c = W(bones.chest);
+    box(bones.chest, 0.34, 0.3, 0.21, body, c.clone().add(new THREE.Vector3(0, 0.07, 0)));
+    box(bones.chest, 0.45, 0.09, 0.17, body, c.clone().add(new THREE.Vector3(0, 0.175, 0)));
+    box(bones.chest, 0.13, 0.28, 0.05, dark, c.clone().add(new THREE.Vector3(0, 0.06, 0.112)));
+    box(bones.chest, 0.2, 0.24, 0.07, dark, c.clone().add(new THREE.Vector3(0, 0.1, -0.125)));
+    attach(bones.chest, new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.055, 0.05, 10), dark), c.clone().add(new THREE.Vector3(0, 0.215, 0)));
+    const core = attach(
+      bones.chest,
+      new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.02, 12), coreM),
+      c.clone().add(new THREE.Vector3(0, 0.12, 0.13)),
+      new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.PI / 2, 0, 0))
+    );
+    core.castShadow = false;
+
+    // --- открытый "позвоночник" между грудью и тазом ---
+    const s = W(bones.spine);
+    attach(bones.spine, new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.062, 0.38, 10), dark), s.clone().add(new THREE.Vector3(0, 0.2, 0)));
+    box(bones.spine, 0.18, 0.13, 0.12, body, s.clone().add(new THREE.Vector3(0, 0.01, 0)));
+
+    // --- таз ---
+    const h = W(bones.hips);
+    box(bones.hips, 0.26, 0.15, 0.18, body, h.clone().add(new THREE.Vector3(0, 0.01, 0)));
+
+    // --- конечности ---
+    for (const side of ['l', 'r']) {
+      const sgn = side === 'l' ? 1 : -1;
+      const ua = bones['upperarm' + side];
+      const la = bones['lowerarm' + side];
+      const wr = bones['wrist' + side];
+      const ha = bones['hand' + side];
+      ball(ua, 0.068, joint, W(ua));
+      seg(ua, la, 0.04, body);
+      ball(la, 0.05, joint, W(la));
+      seg(la, wr, 0.042, accent);
+      ball(wr, 0.036, joint, W(wr));
+      box(ha, 0.085, 0.09, 0.06, dark, W(ha).add(new THREE.Vector3(sgn * 0.045, -0.005, 0)));
+
+      const ul = bones['upperleg' + side];
+      const ll = bones['lowerleg' + side];
+      const ft = bones['foot' + side];
+      ball(ul, 0.06, joint, W(ul));
+      seg(ul, ll, 0.054, body);
+      ball(ll, 0.054, joint, W(ll));
+      seg(ll, ft, 0.045, body);
+      ball(ft, 0.038, joint, W(ft));
+      const fp = W(ft);
+      box(ft, 0.095, 0.06, 0.21, dark, new THREE.Vector3(fp.x, 0.05, fp.z + 0.055));
     }
   }
 
@@ -323,7 +374,7 @@ export class Player {
       }, 200);
     }
     this.velY -= GRAVITY * dt;
-    if (this.grounded && this.velY < -3) this.velY = -3;
+    if (this.grounded && this.velY < -5) this.velY = -5;
 
     // ---- move through rapier character controller ----
     const move = {
@@ -341,11 +392,11 @@ export class Player {
     // computedGrounded is unreliable while the controller keeps its offset gap —
     // back it up with a short downward ray (skipped while ascending after a jump)
     let rayGrounded = false;
-    if (this.velY <= 0.5) {
+    if (this.velY <= 1.5) {
       rayGrounded = !!this.physics.raycast(
-        { x: this.pos.x, y: this.pos.y + 0.2, z: this.pos.z },
+        { x: this.pos.x, y: this.pos.y + 0.8, z: this.pos.z },
         { x: 0, y: -1, z: 0 },
-        0.42,
+        1.65,
         this.collider
       );
     }
@@ -354,8 +405,8 @@ export class Player {
     if (this.grounded && wasAirborneLong) {
       this.jumpPhase = 'land';
       this.landT = 0.22;
-      this.cameraRig.addTrauma(0.08);
-      this.audio.play3d('footstep', this.pos, { volume: 0.8, rate: 0.8 });
+      this.cameraRig.addTrauma(0.22); // приземление многотонной машины
+      this.audio.play3d('footstep', this.pos, { volume: 1, rate: 0.55 });
     }
     this.body.setNextKinematicTranslation({ x: this.pos.x, y: this.pos.y, z: this.pos.z });
 
@@ -435,18 +486,19 @@ export class Player {
           anim = localR > 0 ? 'Running_Strafe_Right' : 'Running_Strafe_Left';
         } else if (localF < -0.5) {
           anim = 'Walking_Backwards';
-          ts = THREE.MathUtils.clamp(speed / 2.4, 0.6, 1.5);
+          ts = THREE.MathUtils.clamp(speed / 4.8, 0.6, 1.5);
         }
         this.setBase(anim, 0.16, ts);
       }
 
-      // footsteps
+      // шаги: тяжёлые и редкие
       const speedNow = Math.hypot(this.vel.x, this.vel.z);
-      if (speedNow > 1.2) {
+      if (speedNow > 2) {
         this.footT -= dt * speedNow;
         if (this.footT <= 0) {
-          this.footT = 2.05;
-          this.audio.play3d('footstep', this.pos, { volume: 0.35, rate: 1.1 });
+          this.footT = 4.4;
+          this.audio.play3d('footstep', this.pos, { volume: 0.7, rate: 0.6 });
+          this.cameraRig.addTrauma(0.025);
         }
       }
     }
@@ -510,9 +562,9 @@ export class Player {
       end = origin.clone().addScaledVector(dir, 120);
     }
 
-    this.vfx.tracer(muzzlePos, end);
-    this.vfx.muzzle(muzzlePos);
-    this.audio.play3d('shot', muzzlePos, { volume: 0.75 });
+    this.vfx.tracer(muzzlePos, end, 0x7fe8ff, 3);
+    this.vfx.muzzle(muzzlePos, 0x9fd8ff, 3.2);
+    this.audio.play3d('shot', muzzlePos, { volume: 0.75, rate: 0.85 });
     this.cameraRig.pitchKick(0.0095);
     this.cameraRig.addTrauma(0.06);
   }

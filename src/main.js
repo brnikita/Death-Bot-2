@@ -210,6 +210,48 @@ async function boot() {
     return level.districts[stage.district].center;
   }
 
+  // ---------- GPU warmup ----------
+  // Один реальный кадр через композер со ВСЕЙ сценой (без фрустум-куллинга):
+  // компилируются все варианты шейдеров и загружаются все текстуры в видеопамять.
+  // Без этого первый показ зоны/врага/выстрела вызывал фриз на слабых GPU.
+  playBtn.textContent = 'ПОДГОТОВКА…';
+  {
+    for (const z of level.zones) z.group.visible = true;
+    // шаблоны врагов и босс — чтобы их шейдеры тоже попали в кадр прогрева
+    const temp = new THREE.Group();
+    temp.position.set(0, -200, 0);
+    for (const key of ['minion', 'rogue', 'mage', 'warrior']) {
+      if (assets.models[key]) temp.add(assets.models[key].scene);
+    }
+    engine.scene.add(temp);
+    boss.root.visible = true;
+    const wp = new THREE.Vector3(0, -190, 0);
+    vfx.muzzle(wp);
+    vfx.tracer(wp, wp.clone().setY(-189));
+    vfx.burst(wp, null);
+    vfx.ring(wp);
+    // по одному врагу каждого типа: у их клонов свои варианты материалов
+    enemies.spawnNow(new THREE.Vector3(20, 0, 40), 'shambler');
+    enemies.spawnNow(new THREE.Vector3(22, 0, 40), 'runner');
+    enemies.spawnNow(new THREE.Vector3(24, 0, 40), 'spitter');
+
+    const culled = [];
+    engine.scene.traverse((o) => {
+      if ((o.isMesh || o.isPoints || o.isSprite) && o.frustumCulled) {
+        culled.push(o);
+        o.frustumCulled = false;
+      }
+    });
+    engine.render(1 / 60);
+    for (const o of culled) o.frustumCulled = true;
+
+    boss.root.visible = false;
+    for (const e of enemies.enemies) e.dispose();
+    enemies.enemies.length = 0;
+    engine.scene.remove(temp);
+    level.updateZones(level.playerSpawn);
+  }
+
   // ---------- start / pause ----------
   playBtn.disabled = false;
   playBtn.textContent = 'НАЧАТЬ МИССИЮ';
@@ -290,7 +332,7 @@ async function boot() {
 
       cameraRig.update(dt, player.pos, player.collider);
       atmosphere.update(dt, player.pos);
-      level.update(dt, atmosphere.nightF);
+      level.update(dt, atmosphere.nightF, player.pos);
       level.updateZones(player.pos);
       wildlife.update(dt);
       vfx.update(dt);
@@ -312,7 +354,7 @@ async function boot() {
         engine.camera.lookAt(0, 2, -8);
       }
       atmosphere.update(dt, player.pos);
-      level.update(dt, atmosphere.nightF);
+      level.update(dt, atmosphere.nightF, player.pos);
       wildlife.update(dt);
       vfx.update(dt);
     }

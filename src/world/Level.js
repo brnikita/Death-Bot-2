@@ -7,14 +7,25 @@ export class Level {
     this.scene = scene;
     this.physics = physics;
     this.assets = assets;
-    this.flickerLights = [];
-    this.fires = [];
     this.crates = [];
     this.beacons = [];
     this.mapStatics = [];
     this.zones = [];
     this.time = 0;
     this.nightF = 0;
+
+    // Пул PointLight'ов постоянного размера: лампы/костры по карте — лишь "точки
+    // света" (lightSpots), а реальные источники получают 4 ближайшие к игроку.
+    // Число источников в сцене никогда не меняется → three.js не перекомпилирует
+    // шейдеры на лету (это вызывало фризы при подгрузке зон).
+    this.lightSpots = [];
+    this.poolLights = [];
+    for (let i = 0; i < 4; i++) {
+      const l = new THREE.PointLight(0xffffff, 0, 10, 2);
+      l.position.y = -100;
+      scene.add(l);
+      this.poolLights.push(l);
+    }
 
     // one shared emissive material for every lit window on the map
     this.litWinMat = new THREE.MeshStandardMaterial({
@@ -56,7 +67,7 @@ export class Level {
     for (const z of this.zones) {
       const dx = playerPos.x - z.cx;
       const dz = playerPos.z - z.cz;
-      z.group.visible = dx * dx + dz * dz < (z.r + 55) * (z.r + 55);
+      z.group.visible = dx * dx + dz * dz < (z.r + 70) * (z.r + 70);
     }
   }
 
@@ -992,9 +1003,7 @@ export class Level {
   }
 
   addFire(x, z, zoneGroup = null) {
-    const light = new THREE.PointLight(0xff6622, 14, 13, 2);
-    light.position.set(x, 0.8, z);
-    this.parentOf(zoneGroup).add(light);
+    this.lightSpots.push({ x, y: 0.8, z, color: 0xff6622, base: 14, range: 13, kind: 'fire' });
     const debris = new THREE.Mesh(
       new THREE.DodecahedronGeometry(0.5, 0),
       new THREE.MeshStandardMaterial({ color: 0x1a1410, emissive: 0xff3300, emissiveIntensity: 1.4, roughness: 1 })
@@ -1002,7 +1011,6 @@ export class Level {
     debris.position.set(x, 0.25, z);
     debris.scale.y = 0.6;
     this.parentOf(zoneGroup).add(debris);
-    this.fires.push({ light, base: 14 });
   }
 
   addLamp(x, z, flicker, zoneGroup = null) {
@@ -1022,10 +1030,11 @@ export class Level {
     parent.add(head);
     this.physics.addBox(x, 2.6, z, 0.25, 5.2, 0.25);
     if (flicker) {
-      const l = new THREE.PointLight(0xbfdfff, 6, 11, 2);
-      l.position.set(x + 0.35, 5.0, z);
-      parent.add(l);
-      this.flickerLights.push({ light: l, mat: headMat, base: 6, t: 0 });
+      this.lightSpots.push({
+        x: x + 0.35, y: 5.0, z,
+        color: 0xbfdfff, base: 6, range: 11,
+        kind: 'lamp', mat: headMat, t: 0, on: true,
+      });
     }
   }
 
@@ -1052,22 +1061,48 @@ export class Level {
     parent.add(arch);
   }
 
-  update(dt, nightF = 0) {
+  update(dt, nightF = 0, playerPos = null) {
     this.time += dt;
     this.nightF = nightF;
-    for (const f of this.fires) {
-      f.light.intensity = f.base * (0.75 + Math.sin(this.time * 11 + f.light.position.x) * 0.12 + Math.random() * 0.2);
-    }
-    for (const fl of this.flickerLights) {
-      fl.t -= dt;
-      if (fl.t <= 0) {
-        const base = fl.base * (0.5 + nightF * 1.2);
-        const on = Math.random() > 0.32;
-        fl.light.intensity = on ? base * (0.6 + Math.random() * 0.6) : 0.3;
-        fl.mat.emissiveIntensity = on ? 1.2 + nightF * 1.4 : 0.08;
-        fl.t = on ? 0.06 + Math.random() * 0.4 : 0.04 + Math.random() * 0.12;
+
+    // мерцание материалов ламп (дёшево — это юниформы, не источники света)
+    for (const s of this.lightSpots) {
+      if (s.kind !== 'lamp') continue;
+      s.t -= dt;
+      if (s.t <= 0) {
+        s.on = Math.random() > 0.32;
+        s.mat.emissiveIntensity = s.on ? 1.2 + nightF * 1.4 : 0.08;
+        s.t = s.on ? 0.06 + Math.random() * 0.4 : 0.04 + Math.random() * 0.12;
       }
     }
+
+    // 4 ближайших к игроку огня получают реальные PointLight'ы из пула
+    if (playerPos) {
+      for (const s of this.lightSpots) {
+        const dx = s.x - playerPos.x;
+        const dz = s.z - playerPos.z;
+        s.d2 = dx * dx + dz * dz;
+      }
+      const near = [...this.lightSpots].sort((a, b) => a.d2 - b.d2);
+      for (let i = 0; i < this.poolLights.length; i++) {
+        const l = this.poolLights[i];
+        const s = near[i];
+        if (!s || s.d2 > 65 * 65) {
+          l.intensity = 0;
+          continue;
+        }
+        l.position.set(s.x, s.y, s.z);
+        l.color.setHex(s.color);
+        l.distance = s.range;
+        l.intensity =
+          s.kind === 'fire'
+            ? s.base * (0.75 + Math.sin(this.time * 11 + s.x) * 0.12 + Math.random() * 0.2)
+            : s.on
+              ? s.base * (0.5 + nightF * 1.2) * (0.6 + Math.random() * 0.4)
+              : 0.3;
+      }
+    }
+
     this.litWinMat.emissiveIntensity = 0.7 + nightF * 2.6;
     for (const b of this.beacons) {
       b.emissiveIntensity = (Math.sin(this.time * 2.4) > 0.4 ? 2.5 : 0.15) * (0.5 + nightF * 0.8);

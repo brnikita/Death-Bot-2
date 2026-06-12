@@ -74,12 +74,15 @@ export class Boss {
       }
     }
 
-    this.glow = new THREE.PointLight(0xff2210, 10, 12, 2);
-    this.glow.position.y = 3.5;
+    // свет всегда в сцене с intensity 0: смена числа видимых источников
+    // заставляет three.js перекомпилировать шейдеры всей сцены (фриз)
+    this.glow = new THREE.PointLight(0xff2210, 0, 12, 2);
+    this.glow.position.y = -100;
+    scene.add(this.glow);
 
     this.root = new THREE.Group();
-    this.root.add(this.model, this.glow);
     this.root.visible = false;
+    this.root.add(this.model);
     scene.add(this.root);
 
     this.mixer = new THREE.AnimationMixer(this.model);
@@ -119,6 +122,7 @@ export class Boss {
     this.pos.copy(pos);
     this.root.position.copy(pos);
     this.root.visible = true;
+    this.glow.intensity = 10;
     this.active = true;
     this.state = 'awaken';
     this.t = 0;
@@ -207,7 +211,7 @@ export class Boss {
         );
         m.position.copy(origin);
         this.scene.add(m);
-        const target = player.pos.clone().add(new THREE.Vector3(0, 1.2, 0));
+        const target = player.pos.clone().add(new THREE.Vector3(0, 3.4, 0));
         const dir = target.sub(origin).normalize();
         dir.x += (Math.random() - 0.5) * 0.12;
         dir.z += (Math.random() - 0.5) * 0.12;
@@ -226,7 +230,7 @@ export class Boss {
       p.life -= dt;
       p.m.position.addScaledVector(p.vel, dt);
       let hit = false;
-      if (!player.dead && p.m.position.distanceTo(player.pos.clone().add(new THREE.Vector3(0, 1, 0))) < 0.85) {
+      if (!player.dead && p.m.position.distanceTo(player.pos.clone().add(new THREE.Vector3(0, 3.4, 0))) < 1.9) {
         player.takeDamage(16, p.m.position);
         hit = true;
       }
@@ -275,9 +279,9 @@ export class Boss {
         this.faceTowards(toPlayer, dt, 5);
         this.moveAlong(toPlayer.normalize(), 2.3 * speedMul, dt);
 
-        if (dist < 3.4 && !player.dead) {
+        if (dist < 4.7 && !player.dead) {
           this.startMelee();
-        } else if (phase >= 3 && this.whirlCD <= 0 && dist < 6) {
+        } else if (phase >= 3 && this.whirlCD <= 0 && dist < 7.5) {
           this.startWhirl();
         } else if (this.chargeCD <= 0 && dist > 8 && !player.dead) {
           this.state = 'charge_tele';
@@ -311,7 +315,7 @@ export class Boss {
       case 'charge': {
         this.t -= dt;
         this.moveAlong(this.chargeDir, 13.5, dt);
-        if (!this.chargeHit && dist < 2.6 && !player.dead) {
+        if (!this.chargeHit && dist < 3.9 && !player.dead) {
           this.chargeHit = true;
           player.takeDamage(30, this.pos);
           player.cameraRig.addTrauma(0.5);
@@ -331,7 +335,7 @@ export class Boss {
         this.faceTowards(toPlayer, dt, 4);
         if (!this.meleeHitDone && this.t > 0.62) {
           this.meleeHitDone = true;
-          if (dist < 4.4 && !player.dead) {
+          if (dist < 5.7 && !player.dead) {
             // arc check: is player roughly in front?
             const fwd = new THREE.Vector3(Math.sin(this.faceYaw), 0, Math.cos(this.faceYaw));
             if (fwd.dot(toPlayer.clone().normalize()) > 0.25) {
@@ -356,7 +360,7 @@ export class Boss {
           this.whirlRingDone = true;
           this.vfx.ring(this.pos.clone(), 0xff3322, 4.6);
           this.audio.play3d('boss_slam', this.pos, { volume: 1 });
-          if (dist < 4.6 && !player.dead) {
+          if (dist < 5.9 && !player.dead) {
             player.takeDamage(24, this.pos);
             player.cameraRig.addTrauma(0.45);
           }
@@ -388,6 +392,7 @@ export class Boss {
 
     if (phase === 3) this.glow.intensity = 14 + Math.sin(performance.now() * 0.01) * 4;
     this.root.position.copy(this.pos);
+    this.glow.position.set(this.pos.x, this.pos.y + 3.5, this.pos.z);
   }
 
   startMelee() {

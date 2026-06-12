@@ -11,6 +11,9 @@ export class Physics {
   constructor() {
     this.world = new RAPIER.World({ x: 0, y: -19.62, z: 0 });
     this.world.timestep = 1 / 60;
+    // тонкие препятствия (столбы, антенны, деревья): пули и ходьба их учитывают,
+    // а камера игнорирует — иначе она схлопывается, зацепившись за мачту
+    this.cameraIgnore = new Set();
   }
 
   step() {
@@ -27,7 +30,9 @@ export class Physics {
         w: Math.cos(rotY / 2),
       })
     );
-    this.world.createCollider(RAPIER.ColliderDesc.cuboid(sx / 2, sy / 2, sz / 2), body);
+    const col = this.world.createCollider(RAPIER.ColliderDesc.cuboid(sx / 2, sy / 2, sz / 2), body);
+    // тонкие и высокие объекты камера не считает препятствием
+    if (Math.min(sx, sz) < 0.9 && sy > 2) this.cameraIgnore.add(col.handle);
     return body;
   }
 
@@ -65,7 +70,9 @@ export class Physics {
       true,
       undefined,
       undefined,
-      excludeCollider
+      excludeCollider,
+      undefined,
+      (c) => !this.cameraIgnore.has(c.handle)
     );
     return hit ? hit.time_of_impact ?? hit.timeOfImpact : null;
   }

@@ -41,7 +41,8 @@ export const ENEMY_TYPES = {
   },
 };
 
-const ATTACK_RANGE = 2.3;
+// дистанция атаки до ЦЕНТРА игрока: радиус капсулы гиганта ~1.25 + замах ~2.3
+const ATTACK_RANGE = 3.6;
 
 let nextId = 1;
 
@@ -207,7 +208,7 @@ class Enemy {
       if (!this.attackHitDone && this.t > this.type.castTime * 0.55) {
         this.attackHitDone = true;
         const origin = this.pos.clone().add(new THREE.Vector3(0, 1.4, 0));
-        const target = player.pos.clone().add(new THREE.Vector3(0, 1.1, 0));
+        const target = player.pos.clone().add(new THREE.Vector3(0, 3.4, 0)); // в корпус гиганта
         const dir = target.sub(origin).normalize();
         this.mgr.spawnProjectile(origin, dir, this.type.damage);
         this.mgr.audio.play3d('zombie_attack', this.pos, { volume: 0.5, rate: 1.3 });
@@ -318,6 +319,8 @@ export class EnemyManager {
     this.enemies = [];
     this.pickups = [];
     this.projectiles = [];
+    this.spawnQueue = []; // спавн растянут по кадрам: клонирование модели — дорогая операция
+    this.spawnT = 0;
     this.killCount = 0;
     this.onKill = () => {
       this.killCount++;
@@ -366,6 +369,13 @@ export class EnemyManager {
   spawnAt(pos, type = 'shambler') {
     const p = this.findFreeSpot(pos.clone());
     p.y = 0;
+    this.spawnQueue.push({ p, type });
+  }
+
+  /** Немедленный спавн (для тестов/отладки). */
+  spawnNow(pos, type = 'shambler') {
+    const p = this.findFreeSpot(pos.clone());
+    p.y = 0;
     this.enemies.push(new Enemy(this, p, type));
   }
 
@@ -377,7 +387,7 @@ export class EnemyManager {
   }
 
   aliveCount() {
-    return this.enemies.filter((e) => !e.dead).length;
+    return this.enemies.filter((e) => !e.dead).length + this.spawnQueue.length;
   }
 
   spawnPickup(pos) {
@@ -402,6 +412,14 @@ export class EnemyManager {
   }
 
   update(dt, player) {
+    // не более одного спавна за тик — клонирование модели в один кадр даёт рывок
+    this.spawnT -= dt;
+    if (this.spawnQueue.length && this.spawnT <= 0) {
+      this.spawnT = 0.12;
+      const { p, type } = this.spawnQueue.shift();
+      this.enemies.push(new Enemy(this, p, type));
+    }
+
     for (let i = this.enemies.length - 1; i >= 0; i--) {
       const e = this.enemies[i];
       e.update(dt, player);
@@ -416,7 +434,7 @@ export class EnemyManager {
       p.life -= dt;
       p.m.position.addScaledVector(p.vel, dt);
       let hit = false;
-      if (!player.dead && p.m.position.distanceTo(player.pos.clone().add(new THREE.Vector3(0, 1, 0))) < 0.8) {
+      if (!player.dead && p.m.position.distanceTo(player.pos.clone().add(new THREE.Vector3(0, 3.4, 0))) < 1.9) {
         player.takeDamage(p.damage, p.m.position);
         hit = true;
       }
@@ -434,7 +452,7 @@ export class EnemyManager {
       p.t += dt;
       p.m.rotation.y += dt * 2.4;
       p.m.position.y = 0.7 + Math.sin(p.t * 3) * 0.12;
-      if (!player.dead && p.m.position.distanceTo(player.pos) < 1.4) {
+      if (!player.dead && p.m.position.distanceTo(player.pos) < 3.4) {
         player.hp = Math.min(player.maxHp, player.hp + 25);
         player.hud.setHealth(player.hp / player.maxHp);
         this.audio.play2d('pickup', { volume: 0.7 });

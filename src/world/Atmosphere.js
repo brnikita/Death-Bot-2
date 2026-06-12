@@ -54,10 +54,10 @@ export class Atmosphere {
     this.sun.shadow.mapSize.set(2048, 2048);
     // the shadow frustum follows the player — smaller area, sharper shadows, cheaper
     const sc = this.sun.shadow.camera;
-    sc.left = -48;
-    sc.right = 48;
-    sc.top = 48;
-    sc.bottom = -48;
+    sc.left = -62;
+    sc.right = 62;
+    sc.top = 62;
+    sc.bottom = -62;
     sc.near = 1;
     sc.far = 160;
     this.sun.shadow.bias = -0.0006;
