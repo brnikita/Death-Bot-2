@@ -38,7 +38,7 @@ console.log('player y:', await page.evaluate(() => +window.DB2.player.pos.y.toFi
 await look(0, 0.95, -2.7, 0.85, 'd0-front'); // робот смотрит в -Z
 await look(-2.7, 0.95, 0, 0.85, 'd1-side');
 await look(0, 0.95, 2.7, 0.85, 'd2-back');
-await look(0, 1.55, -0.95, 1.45, 'd3-face');
+await look(0, 2.2, -1.0, 2.05, 'd3-face');
 await look(-1.6, 1.3, -1.6, 0.85, 'd4-three-quarter');
 
 await browser.close();

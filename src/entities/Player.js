@@ -112,7 +112,7 @@ export class Player {
     const dark = M({ color: 0x0a0c0f, metalness: 0.5, roughness: 0.66 });
     const joint = M({ color: 0x555b62, metalness: 0.92, roughness: 0.3 });
     const accent = M({ color: 0x4f4839, metalness: 0.35, roughness: 0.7 });
-    const eyeM = M({ color: 0x05070a, emissive: 0xeef6ff, emissiveIntensity: 3 });
+    const eyeM = M({ color: 0x020308, emissive: 0x1a35d4, emissiveIntensity: 2.6 }); // тёмно-синее свечение
     const coreM = M({ color: 0x000000, emissive: 0x33e8ff, emissiveIntensity: 3 });
 
     // спрятать всё родное тело рыцаря — скелет продолжает анимироваться
