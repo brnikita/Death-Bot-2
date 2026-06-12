@@ -43,6 +43,23 @@ async function boot() {
 
   const input = new Input(canvas, DEBUG);
   const atmosphere = new Atmosphere(engine.scene, assets.hdri);
+  engine.attachSun(atmosphere.sun);
+
+  // профиль графики: сохранённый выбор или автоопределение по GPU
+  const qButtons = [...document.querySelectorAll('.q-btn')];
+  const markQuality = (q) => qButtons.forEach((b) => b.classList.toggle('active', b.dataset.q === q));
+  if (!LOWFX) {
+    const startQ = localStorage.getItem('db2.quality') || engine.detectPreset();
+    engine.setQuality(startQ);
+    markQuality(startQ);
+    engine.onQualityChange = markQuality; // авто-понижение тоже подсвечиваем
+    qButtons.forEach((b) =>
+      b.addEventListener('click', () => {
+        engine.setQuality(b.dataset.q);
+        localStorage.setItem('db2.quality', b.dataset.q);
+      })
+    );
+  }
   const level = new Level(engine.scene, physics, assets);
   const wildlife = new Wildlife(engine.scene);
   const vfx = new VFX(engine.scene);
@@ -246,12 +263,15 @@ async function boot() {
   }
 
   // ---------- main loop ----------
+  const fpsEl = document.getElementById('fps');
+  let fpsT = 0;
   let last = performance.now();
   let acc = 0;
 
   function frame(now) {
     requestAnimationFrame(frame);
-    let dt = Math.min((now - last) / 1000, 0.05);
+    const rawDt = Math.max((now - last) / 1000, 0); // реальное время кадра, без ограничения
+    let dt = Math.min(rawDt, 0.05);
     last = now;
 
     if (state === 'play') {
@@ -297,7 +317,15 @@ async function boot() {
       vfx.update(dt);
     }
 
-    engine.render(dt);
+    fpsT += rawDt;
+    if (fpsT > 0.5) {
+      fpsT = 0;
+      const f = Math.round(engine.fps);
+      fpsEl.textContent = `${f} FPS`;
+      fpsEl.className = f >= 45 ? '' : f >= 28 ? 'warn' : 'bad';
+    }
+
+    engine.render(dt, rawDt);
   }
   requestAnimationFrame(frame);
 }

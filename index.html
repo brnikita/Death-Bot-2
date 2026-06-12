@@ -22,6 +22,7 @@
     <div id="wave-banner" class="hidden"></div>
 
     <canvas id="minimap" width="190" height="190"></canvas>
+    <div id="fps"></div>
 
     <div id="bossbar" class="hidden">
       <div class="label" id="bossname">ИНЖЕНЕР ХААС</div>
@@ -48,6 +49,12 @@
         <b>WASD</b> — движение · <b>SHIFT</b> — бег · <b>ПРОБЕЛ</b> — прыжок<br />
         <b>МЫШЬ</b> — камера · <b>ЛКМ</b> — огонь · <b>ПКМ</b> — прицел · <b>R</b> — перезарядка
       </p>
+      <div id="quality-row">
+        <span class="q-label">ГРАФИКА</span>
+        <button class="q-btn" data-q="low">НИЗКО</button>
+        <button class="q-btn" data-q="medium">СРЕДНЕ</button>
+        <button class="q-btn" data-q="high">ВЫСОКО</button>
+      </div>
       <button id="play-btn" disabled>ЗАГРУЗКА…</button>
     </div>
   </div>

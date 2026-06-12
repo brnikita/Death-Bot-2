@@ -11,8 +11,17 @@ import {
 } from 'postprocessing';
 import { N8AOPostPass } from 'n8ao';
 
+// Профили графики. renderScale — доля от разрешения экрана (главный рычаг на слабых GPU).
+const PRESETS = {
+  high: { renderScale: Math.min(window.devicePixelRatio, 1.5), shadows: true, shadowMap: 2048, ao: true, smaa: true },
+  medium: { renderScale: 1.0, shadows: true, shadowMap: 1024, ao: false, smaa: true },
+  low: { renderScale: 0.7, shadows: false, shadowMap: 512, ao: false, smaa: false },
+};
+const PRESET_ORDER = ['high', 'medium', 'low'];
+
 export class Engine {
   constructor(canvas, { lowfx = false, preserve = false } = {}) {
+    this.lowfx = lowfx;
     this.renderer = new THREE.WebGLRenderer({
       canvas,
       powerPreference: 'high-performance',
@@ -46,12 +55,6 @@ export class Engine {
       this.composer.addPass(this.n8ao);
     }
 
-    // adaptive quality: drop a tier after sustained low FPS (never climbs back to avoid flicker)
-    this.qualityTier = 0; // 0 high, 1 medium, 2 low
-    this._fpsAcc = 0;
-    this._fpsN = 0;
-    this._lowT = 0;
-
     this.bloom = new BloomEffect({
       luminanceThreshold: 0.75,
       luminanceSmoothing: 0.25,
@@ -61,11 +64,72 @@ export class Engine {
     const grade = new HueSaturationEffect({ saturation: 0.08 });
     const contrast = new BrightnessContrastEffect({ brightness: 0.0, contrast: 0.07 });
     const vignette = new VignetteEffect({ darkness: 0.52, offset: 0.28 });
-    this.composer.addPass(
-      new EffectPass(this.camera, this.bloom, grade, contrast, vignette, new SMAAEffect())
-    );
+    this.fxPass = new EffectPass(this.camera, this.bloom, grade, contrast, vignette);
+    this.composer.addPass(this.fxPass);
+    // SMAA отдельным проходом, чтобы выключать независимо
+    this.smaaPass = new EffectPass(this.camera, new SMAAEffect());
+    this.composer.addPass(this.smaaPass);
+
+    this.sun = null; // назначается после создания Atmosphere
+    this.quality = 'high';
+    this.onQualityChange = null;
+
+    // adaptive quality: drop a preset after sustained low FPS (never climbs back to avoid flicker)
+    this._lowT = 0;
+    this.fps = 60;
 
     window.addEventListener('resize', () => this.resize());
+  }
+
+  /** Определить стартовый профиль по названию GPU (встроенная графика → низкий). */
+  detectPreset() {
+    let name = '';
+    try {
+      const gl = this.renderer.getContext();
+      const ext = gl.getExtension('WEBGL_debug_renderer_info');
+      name = String(gl.getParameter(ext ? ext.UNMASKED_RENDERER_WEBGL : gl.RENDERER) || '');
+    } catch {
+      /* ignore */
+    }
+    if (/swiftshader|software|basic render/i.test(name)) return 'low';
+    if (/intel.*\b(hd|uhd)\s*graphics/i.test(name)) return 'low';
+    if (/intel.*iris|apple gpu|adreno|mali/i.test(name)) return 'medium';
+    return 'high';
+  }
+
+  attachSun(sun) {
+    this.sun = sun;
+    this.setQuality(this.quality);
+  }
+
+  setQuality(preset) {
+    if (this.lowfx || !PRESETS[preset]) return;
+    const p = PRESETS[preset];
+    this.quality = preset;
+    this.renderer.setPixelRatio(p.renderScale);
+    this.renderer.shadowMap.enabled = p.shadows;
+    if (this.n8ao) this.n8ao.enabled = p.ao;
+    // последний включённый проход должен рисовать на экран
+    this.smaaPass.enabled = p.smaa;
+    this.smaaPass.renderToScreen = p.smaa;
+    this.fxPass.renderToScreen = !p.smaa;
+    if (this.sun) {
+      this.sun.castShadow = p.shadows;
+      if (this.sun.shadow.mapSize.x !== p.shadowMap) {
+        this.sun.shadow.mapSize.set(p.shadowMap, p.shadowMap);
+        if (this.sun.shadow.map) {
+          this.sun.shadow.map.dispose();
+          this.sun.shadow.map = null;
+        }
+      }
+    }
+    // материалы должны перекомпилироваться при выключении теней
+    this.scene.traverse((o) => {
+      if (o.isMesh && o.material) o.material.needsUpdate = true;
+    });
+    this.resize();
+    if (this.onQualityChange) this.onQualityChange(preset);
+    console.info(`[DB2] graphics preset: ${preset.toUpperCase()}`);
   }
 
   resize() {
@@ -77,23 +141,15 @@ export class Engine {
     this.composer.setSize(w, h);
   }
 
-  render(dt) {
-    if (dt > 0 && dt < 1) {
-      this._lowT = 1 / dt < 45 ? this._lowT + dt : 0;
-      if (this._lowT > 3 && this.qualityTier < 2) {
-        this.qualityTier++;
-        this._lowT = 0;
-        if (this.qualityTier === 1) {
-          this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.1));
-          this.resize();
-          console.info('[DB2] performance: switched to MEDIUM quality');
-        } else {
-          if (this.n8ao) this.n8ao.enabled = false;
-          this.renderer.setPixelRatio(1.0);
-          this.renderer.shadowMap.enabled = false;
-          this.resize();
-          console.info('[DB2] performance: switched to LOW quality');
-        }
+  render(dt, rawDt = dt) {
+    if (rawDt > 0 && rawDt < 5) {
+      this.fps += (1 / rawDt - this.fps) * Math.min(1, rawDt * 4); // сглаженный FPS по реальному времени кадра
+      const idx = PRESET_ORDER.indexOf(this.quality);
+      this._lowT = this.fps < 38 ? this._lowT + rawDt : 0;
+      if (this._lowT > 4 && !this.lowfx && idx < PRESET_ORDER.length - 1) {
+        this._lowT = -6; // пауза перед следующим понижением
+        this.setQuality(PRESET_ORDER[idx + 1]);
+        console.info('[DB2] performance: auto-lowered graphics preset');
       }
     }
     this.composer.render(dt);

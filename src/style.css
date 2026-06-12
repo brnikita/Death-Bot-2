@@ -115,3 +115,33 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; color: #cfe8ef; }
 }
 #play-btn:hover:not(:disabled), .panel button:hover { transform: scale(1.04); box-shadow: 0 0 34px rgba(0, 210, 255, 0.7); }
 #play-btn:disabled { opacity: 0.45; cursor: wait; }
+
+/* --- graphics quality selector (menu) --- */
+#quality-row {
+  margin-top: 22px; display: flex; align-items: center; justify-content: center; gap: 10px;
+}
+#quality-row .q-label {
+  font-size: 12px; letter-spacing: 3px; color: #8aa3aa; margin-right: 6px;
+}
+#quality-row .q-btn {
+  margin-top: 0; padding: 7px 18px; font-size: 12px; font-weight: 700; letter-spacing: 2px;
+  color: #9fc4cd; background: rgba(20, 40, 48, 0.7);
+  border: 1px solid rgba(110, 220, 240, 0.3); cursor: pointer;
+  clip-path: polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
+  box-shadow: none; transition: all 0.15s;
+}
+#quality-row .q-btn:hover { color: #e6fbff; border-color: rgba(110, 220, 240, 0.7); transform: none; box-shadow: 0 0 10px rgba(0, 210, 255, 0.25); }
+#quality-row .q-btn.active {
+  color: #06181d; background: linear-gradient(180deg, #6ef0ff, #1fb8d8);
+  box-shadow: 0 0 14px rgba(0, 210, 255, 0.5);
+}
+
+/* --- fps counter --- */
+#fps {
+  position: absolute; top: 216px; right: 20px; min-width: 64px; text-align: center;
+  font-size: 12px; letter-spacing: 2px; padding: 3px 8px;
+  color: #7fe8a0; background: rgba(8, 16, 20, 0.55);
+  border: 1px solid rgba(110, 220, 240, 0.25);
+}
+#fps.warn { color: #ffd45a; }
+#fps.bad { color: #ff6a4a; }
