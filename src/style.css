@@ -145,3 +145,10 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; color: #cfe8ef; }
 }
 #fps.warn { color: #ffd45a; }
 #fps.bad { color: #ff6a4a; }
+
+/* --- repair kits --- */
+#kits {
+  margin-top: 7px; font-size: 12px; letter-spacing: 2px;
+  color: #4ae8ff; text-shadow: 0 0 8px rgba(46, 232, 255, 0.45);
+}
+#kits.empty { color: #5a6a70; text-shadow: none; }

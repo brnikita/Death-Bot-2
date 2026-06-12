@@ -29,6 +29,11 @@ export class Player {
     this.hp = 100;
     this.maxHp = 100;
     this.dead = false;
+    // ремкомплекты: подбираются с врагов/ящиков, активируются на Q
+    this.kits = 1;
+    this.maxKits = 3;
+    this.repairT = 0;
+    hud.setKits(this.kits, this.maxKits);
     this.ammo = MAG_SIZE;
     this.reloadT = 0;
     this.fireT = 0;
@@ -98,6 +103,21 @@ export class Player {
   setSpawn(p) {
     this.pos.copy(p);
     this.body.setNextKinematicTranslation({ x: p.x, y: p.y, z: p.z });
+  }
+
+  /** Подбор ремкомплекта: в запас, при полном запасе — мгновенный ремонт. */
+  collectRepair() {
+    if (this.kits < this.maxKits) {
+      this.kits++;
+      this.hud.setKits(this.kits, this.maxKits);
+      return true;
+    }
+    if (this.hp < this.maxHp - 0.5) {
+      this.hp = Math.min(this.maxHp, this.hp + 25);
+      this.hud.setHealth(this.hp / this.maxHp);
+      return true;
+    }
+    return false; // некуда — оставляем лежать
   }
 
   /**
@@ -351,7 +371,8 @@ export class Player {
     const wishDir = new THREE.Vector3().addScaledVector(fwd, iz).addScaledVector(right, ix);
     if (wishDir.lengthSq() > 0) wishDir.normalize();
 
-    const maxSpeed = input.aimHeld ? AIM_SPEED : sprint ? SPRINT_SPEED : RUN_SPEED;
+    const maxSpeed =
+      this.repairT > 0 || input.aimHeld ? AIM_SPEED : sprint ? SPRINT_SPEED : RUN_SPEED;
     const targetVel = wishDir.multiplyScalar(moving ? maxSpeed : 0);
     this.vel.x = THREE.MathUtils.damp(this.vel.x, targetVel.x, ACCEL / 4, dt);
     this.vel.z = THREE.MathUtils.damp(this.vel.z, targetVel.z, ACCEL / 4, dt);
@@ -443,9 +464,33 @@ export class Player {
       this.setUpper('2H_Ranged_Reload', 0.1, true);
     }
 
-    if (input.fireHeld && this.fireT <= 0 && this.ammo > 0 && this.reloadT <= 0) {
+    if (input.fireHeld && this.fireT <= 0 && this.ammo > 0 && this.reloadT <= 0 && this.repairT <= 0) {
       this.fireT = FIRE_INTERVAL;
       this.shoot(input, enemyLookup);
+    }
+
+    // ---- саморемонт (Q): тратит ремкомплект, +45 брони за 1.8с ----
+    if (input.wasPressed('KeyQ') && this.kits > 0 && this.repairT <= 0 && this.hp < this.maxHp - 1) {
+      this.kits--;
+      this.repairT = 1.8;
+      this.hud.setKits(this.kits, this.maxKits);
+      this.audio.play2d('pickup', { volume: 0.8, rate: 0.85 });
+    }
+    if (this.repairT > 0) {
+      this.repairT -= dt;
+      this.hp = Math.min(this.maxHp, this.hp + 25 * dt);
+      this.hud.setHealth(this.hp / this.maxHp);
+      this._repairFxT = (this._repairFxT || 0) - dt;
+      if (this._repairFxT <= 0) {
+        this._repairFxT = 0.22;
+        this.vfx.burst(
+          this.pos.clone().add(new THREE.Vector3((Math.random() - 0.5) * 0.8, 1.1 + Math.random() * 0.9, (Math.random() - 0.5) * 0.8)),
+          new THREE.Vector3(0, 1, 0),
+          0x2ee8ff,
+          6,
+          1.6
+        );
+      }
     }
 
     // ---- upper body layer ----

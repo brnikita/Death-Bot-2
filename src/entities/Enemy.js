@@ -452,9 +452,7 @@ export class EnemyManager {
       p.t += dt;
       p.m.rotation.y += dt * 2.4;
       p.m.position.y = 0.7 + Math.sin(p.t * 3) * 0.12;
-      if (!player.dead && p.m.position.distanceTo(player.pos) < 1.8) {
-        player.hp = Math.min(player.maxHp, player.hp + 25);
-        player.hud.setHealth(player.hp / player.maxHp);
+      if (!player.dead && p.m.position.distanceTo(player.pos) < 1.8 && player.collectRepair()) {
         this.audio.play2d('pickup', { volume: 0.7 });
         this.scene.remove(p.m);
         this.pickups.splice(i, 1);

@@ -4,6 +4,7 @@ export class HUD {
     this.healthFill = document.getElementById('healthfill');
     this.ammoEl = document.getElementById('ammo');
     this.ammoMag = document.getElementById('ammo-mag');
+    this.kitsEl = document.getElementById('kits');
     this.objectiveEl = document.getElementById('objective');
     this.waveBanner = document.getElementById('wave-banner');
     this.hitmarkerEl = document.getElementById('hitmarker');
@@ -120,6 +121,11 @@ export class HUD {
   setAmmo(mag, reloading) {
     this.ammoMag.textContent = reloading ? '--' : mag;
     this.ammoEl.classList.toggle('low', !reloading && mag <= 6);
+  }
+
+  setKits(n, max) {
+    this.kitsEl.textContent = `РЕМОНТ [Q] ${'◆'.repeat(n)}${'◇'.repeat(Math.max(0, max - n))}`;
+    this.kitsEl.classList.toggle('empty', n === 0);
   }
 
   objective(text) {
