@@ -10,6 +10,7 @@ import { Wildlife } from './world/Wildlife.js';
 import { VFX } from './fx/VFX.js';
 import { AudioManager } from './audio/AudioManager.js';
 import { HUD } from './ui/HUD.js';
+import { Cinematics } from './ui/Cinematics.js';
 import { Player } from './entities/Player.js';
 import { ThirdPersonCamera } from './entities/ThirdPersonCamera.js';
 import { EnemyManager } from './entities/Enemy.js';
@@ -26,6 +27,43 @@ const STAGES = [
 const PARAMS = new URLSearchParams(location.search);
 const DEBUG = PARAMS.has('debug');
 const LOWFX = PARAMS.has('lowfx');
+
+// ---------- заставки (полёты камеры с субтитрами) ----------
+const CINE_INTRO = [
+  {
+    from: [10, 44, -26], to: [4, 26, 6], look: [0, 2, 0],
+    dur: 5, text: 'Война окончена. Боевая машина Р-111 повержена. Но создатель машины не принял поражения…',
+  },
+  {
+    from: [14, 16, -38], to: [4, 9, -52], look: [0, 4, -78],
+    dur: 4.5, text: 'В комплексе HIVE инженер Хаас переделал собственное тело. Теперь мёртвые встают по его сигналу.',
+  },
+  {
+    from: [7, 7, 67], to: [2.6, 2.4, 61.5], look: [0, 1.6, 58],
+    dur: 4.5, text: 'К-250 снова в строю. Это последняя миссия.',
+  },
+];
+const CINE_MID = [
+  {
+    from: [-38, 26, 38], to: [-56, 15, 26], look: [-60, 2, 10],
+    dur: 4.5, text: 'Сигнал Хааса усиливается. Заражение расползается по жилым кварталам.',
+  },
+  {
+    from: [-24, 12, -22], to: [-4, 17, -38], look: [0, 5, -72],
+    dur: 4.5, text: 'Источник — комплекс HIVE. Времени почти не осталось.',
+  },
+];
+const cineEnd = (bossPos) => [
+  {
+    from: [bossPos.x + 9, bossPos.y + 3.5, bossPos.z + 9], to: [bossPos.x - 7, bossPos.y + 4.5, bossPos.z + 8],
+    look: [bossPos.x, bossPos.y + 1.5, bossPos.z],
+    dur: 5, text: 'Инженер Хаас уничтожен. Сигнал мёртвых затихает.',
+  },
+  {
+    from: [0, 9, -48], to: [0, 32, -16], look: [0, 6, 30],
+    dur: 5, text: 'Город будет жить. К-250 выполнил свою миссию.',
+  },
+];
 
 async function boot() {
   const canvas = document.getElementById('game');
@@ -81,8 +119,10 @@ async function boot() {
   );
   const boss = new Boss(assets.models.warrior, engine.scene, physics, vfx, audio, hud, enemies);
 
+  const cine = new Cinematics(engine.camera);
+
   // game director state
-  let state = 'menu'; // menu | play | pause | over
+  let state = 'menu'; // menu | cine | play | pause | over
   let stageIdx = 0;
   let stageWave = 0;
   let stagePhase = 'travel'; // travel | combat | done
@@ -118,11 +158,16 @@ async function boot() {
   };
 
   boss.onDeath = () => {
-    state = 'over';
+    // заставка №3: финал
+    state = 'cine';
     audio.voice('voice_ai_victory');
-    document.exitPointerLock();
     hud.hideBoss();
-    hud.showEnd(true);
+    hud.root.classList.add('hidden');
+    cine.play(cineEnd(boss.pos), () => {
+      state = 'over';
+      document.exitPointerLock();
+      hud.showEnd(true);
+    });
   };
 
   /** Spawn a wave composition around a district center. */
@@ -198,6 +243,15 @@ async function boot() {
             const next = level.districts[STAGES[stageIdx].district];
             hud.banner(`СЕКТОР ЗАЧИЩЕН`);
             hud.objective(`ИДИТЕ К ЦЕЛИ: ${next.name}`);
+            // заставка №2: середина кампании (после промзоны)
+            if (stageIdx === 2) {
+              state = 'cine';
+              hud.root.classList.add('hidden');
+              cine.play(CINE_MID, () => {
+                hud.show();
+                state = 'play';
+              });
+            }
           }
         }
       }
@@ -260,12 +314,17 @@ async function boot() {
     audio.startLoops();
     audio.voice('voice_ai_boot');
     hud.hideScreen();
-    hud.show();
-    hud.setHealth(1);
-    hud.setAmmo(30, false);
-    hud.objective('ИДИТЕ К ЦЕЛИ: ПЛОЩАДЬ');
-    state = 'play';
     input.lock();
+    // заставка №1: вступление, затем бой
+    state = 'cine';
+    cine.play(CINE_INTRO, () => {
+      hud.show();
+      hud.setHealth(1);
+      hud.setAmmo(30, false);
+      hud.setKits(player.kits, player.maxKits);
+      hud.objective('ИДИТЕ К ЦЕЛИ: ПЛОЩАДЬ');
+      state = 'play';
+    });
   });
 
   input.onUnlock = () => {
@@ -291,6 +350,7 @@ async function boot() {
       input,
       audio,
       atmosphere,
+      cine,
       getState: () => state,
       setState: (s) => (state = s),
       startBoss: () => {
@@ -345,6 +405,16 @@ async function boot() {
         crates: level.crates.map((cr) => cr.pos),
         objective: currentObjectivePos(),
       });
+      input.endFrame();
+    } else if (state === 'cine') {
+      input.consumeMouse(); // сбрасываем накопленную дельту, чтобы камеру не дёрнуло после заставки
+      cine.update(dt);
+      player.mixer.update(dt); // герой дышит в кадре, а не застывает
+      atmosphere.update(dt, engine.camera.position);
+      level.update(dt, atmosphere.nightF, engine.camera.position);
+      level.updateZones(engine.camera.position); // зоны вокруг камеры, а не игрока
+      wildlife.update(dt);
+      vfx.update(dt);
       input.endFrame();
     } else if (state === 'menu' || state === 'pause' || state === 'over') {
       // slow idle orbit on menu
